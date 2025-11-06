@@ -20,10 +20,6 @@ Node.js
 
 📦 Como Usar:
 
-Clone o repositório:
-
-bashgit clone https://github.com/seu-usuario/petplus.git
-
 Abra o arquivo index.html no seu navegador
 
 Não é necessária instalação de dependências, pois o projeto utiliza apenas tecnologias web nativas
