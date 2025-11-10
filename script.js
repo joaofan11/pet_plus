@@ -1,5 +1,5 @@
 // ===================================================================
-// 1. ESTADO DA APLICAÇÃO (Agora com API)
+// 1. ESTADO DA APLICAÇÃO
 // ===================================================================
 
 const API_URL = 'http://localhost:3001/api'; // URL do seu backend
@@ -8,17 +8,51 @@ const API_URL = 'http://localhost:3001/api'; // URL do seu backend
 let currentUser = null; 
 
 // Armazena os dados buscados da API
-let users = []; // Ainda útil para buscar donos de pets/posts
 let pets = [];
 let serviceProviders = [];
 let blogPosts = [];
-
 
 // ===================================================================
 // 2. FUNÇÕES AUXILIARES DE API
 // ===================================================================
 
-// (A primeira função apiFetch foi removida por ser duplicada)
+/** Função centralizada para requisições fetch, lidando com o token de autenticação e FormData.
+ */
+async function apiFetch(endpoint, options = {}) {
+    const headers = {
+        ...options.headers,
+    };
+
+    if (currentUser && currentUser.token) {
+        headers['Authorization'] = `Bearer ${currentUser.token}`;
+    }
+
+    if (!options.isFormData) {
+        headers['Content-Type'] = 'application/json';
+    }
+
+    try {
+        const response = await fetch(`${API_URL}${endpoint}`, {
+            ...options,
+            headers,
+        });
+
+        if (!response.ok) {
+            const errorData = await response.json();
+            console.error('Erro na API:', errorData);
+            throw new Error(errorData.message || `HTTP error! status: ${response.status}`);
+        }
+        
+        if (response.status === 204) {
+            return null;
+        }
+
+        return await response.json();
+    } catch (error) {
+        console.error(`Falha no fetch para ${endpoint}:`, error);
+        throw error; 
+    }
+}
 
 // ===================================================================
 // 3. FUNÇÕES UTILITÁRIAS (DOM)
@@ -192,7 +226,6 @@ function logout() {
     localStorage.removeItem('petplus_auth'); // Limpa o login
     updateAuthButtons();
     showPage('landing');
-    // Recarrega as páginas com dados públicos
     loadAdoptionPets();
     loadServices();
 }
@@ -230,8 +263,10 @@ function showPetRegisterPage(petId = null) {
         hiddenId.value = '';
         deleteButtonWrapper.style.display = 'none';
     } else {
+        // Encontra o pet no array local
         const pet = pets.find(p => p.id === petId);
-        if (pet && pet.owner_id === currentUser.user.id) {
+        
+        if (pet && pet.ownerId === currentUser.user.id) {
             title.textContent = 'Atualizar Pet';
             button.textContent = 'Atualizar Pet';
             hiddenId.value = pet.id;
@@ -273,6 +308,7 @@ async function handlePetRegistration(event) {
         return;
     }
 
+    // Se estiver editando, envia a URL da foto antiga para o backend
     if (petId) {
         const pet = pets.find(p => p.id === parseInt(petId));
         if (pet && pet.photoUrl) {
@@ -298,6 +334,7 @@ async function handlePetRegistration(event) {
         form.reset();
         document.getElementById('petEditId').value = '';
         
+        // Recarrega a lista de pets correta
         setTimeout(() => {
             if (responseData.type === 'adoption') {
                 showPage('adoption');
@@ -311,7 +348,6 @@ async function handlePetRegistration(event) {
     }
 }
 
-// Esta é a versão CORRETA de handlePostSubmit
 async function handlePostSubmit(event) {
     event.preventDefault();
     
@@ -329,6 +365,7 @@ async function handlePostSubmit(event) {
         return;
     }
     
+    // Lógica para manter a foto antiga
     if (postId) {
         const post = blogPosts.find(p => p.id === parseInt(postId));
         if (post && post.photoUrl) {
@@ -356,56 +393,17 @@ async function handlePostSubmit(event) {
     }
 }
 
-// Esta é a versão CORRETA de apiFetch
-/**
- * Função centralizada para requisições fetch,
- * lidando com o token de autenticação e FormData.
- */
-async function apiFetch(endpoint, options = {}) {
-    const headers = {
-        ...options.headers,
-    };
-
-    if (currentUser && currentUser.token) {
-        headers['Authorization'] = `Bearer ${currentUser.token}`;
-    }
-
-    if (!options.isFormData) {
-        headers['Content-Type'] = 'application/json';
-    }
-
-    try {
-        const response = await fetch(`${API_URL}${endpoint}`, {
-            ...options,
-            headers,
-        });
-
-        if (!response.ok) {
-            const errorData = await response.json();
-            console.error('Erro na API:', errorData);
-            throw new Error(errorData.message || `HTTP error! status: ${response.status}`);
-        }
-        
-        if (response.status === 204) {
-            return null;
-        }
-
-        return await response.json();
-    } catch (error) {
-        console.error(`Falha no fetch para ${endpoint}:`, error);
-        throw error; 
-    }
-}
 
 async function loadAdoptionPets() {
     const container = document.getElementById('adoptionPets');
     container.innerHTML = `<div class="loading"><div class="spinner"></div></div>`;
     
     try {
+        // Passa filtros pela URL
         const filters = getPetFilters();
         const adoptionPets = await apiFetch(`/pets/adoption?${filters}`);
         
-        pets = adoptionPets; 
+        pets = adoptionPets; // Atualiza o cache local
         
         if (adoptionPets.length === 0) {
             container.innerHTML = `
@@ -635,6 +633,7 @@ function displayServiceProviders(providersToShow, container) {
                         📞 Ligar (${provider.phone})
                     </a>`;
                 
+                // Botão de API de Mapas
                 if (provider.latitude && provider.longitude) {
                     providerActionsContent += `
                         <button class="btn btn-small" onclick='showServiceMapInModal(${JSON.stringify(provider)})' style="background: #3182ce;">
@@ -642,7 +641,7 @@ function displayServiceProviders(providersToShow, container) {
                         </button>`;
                 }
                 
-                if (currentUser && currentUser.user.id === provider.owner_id) {
+                if (currentUser && currentUser.user.id === provider.ownerId) {
                     providerActionsContent += `
                         <button class="btn btn-small" onclick="showServiceRegisterPage(${provider.id})" style="background: #4299e1;">
                             Editar
@@ -680,8 +679,6 @@ function displayServiceProviders(providersToShow, container) {
 }
 
 function filterServices() {
-    // A lógica de filtro foi movida para loadServices()
-    // para evitar duplicação de código.
     loadServices();
 }
 
@@ -700,10 +697,11 @@ function showServiceRegisterPage(serviceId = null) {
         button.textContent = 'Cadastrar Serviço';
         hiddenId.value = '';
         deleteButtonWrapper.style.display = 'none';
+        // Tenta pegar localização (API Unidade IV)
         getDeviceLocationForServiceForm();
     } else {
         const service = serviceProviders.find(s => s.id === serviceId);
-        if (service && service.owner_id === currentUser.user.id) {
+        if (service && service.ownerId === currentUser.user.id) {
             title.textContent = 'Atualizar Serviço';
             button.textContent = 'Atualizar Serviço';
             hiddenId.value = service.id;
@@ -737,6 +735,7 @@ async function handleServiceRegistration(event) {
     const serviceData = Object.fromEntries(formData);
     const serviceId = document.getElementById('serviceEditId').value;
     
+    // Pega lat/lon dos campos escondidos
     serviceData.latitude = document.getElementById('serviceLatitude')?.value || null;
     serviceData.longitude = document.getElementById('serviceLongitude')?.value || null;
 
@@ -817,16 +816,17 @@ async function handleVaccination(event) {
             body: JSON.stringify(vaccineData)
         });
         
+        // Atualiza o pet no array local
         const pet = pets.find(p => p.id === petId);
         if (pet) {
             pet.vaccines.push(newVaccine);
         }
         
         closeVaccinationModal();
-        openPetProfile(petId); 
+        openPetProfile(petId); // Reabre o perfil com a vacina
         
         if (document.getElementById('my-pets').classList.contains('active')) {
-            loadMyPets(); 
+            loadMyPets(); // Recarrega a lista para mostrar o alerta
         }
     } catch (error) {
         alert(`Erro ao adicionar vacina: ${error.message}`);
@@ -839,18 +839,18 @@ function getUpcomingVaccines(pet) {
     const thirtyDaysFromNow = new Date(today.getTime() + (30 * 24 * 60 * 60 * 1000));
     
     return pet.vaccines.filter(vaccine => {
-        if (!vaccine.next_date) return false;
-        const nextDate = new Date(vaccine.next_date);
+        if (!vaccine.nextDate) return false;
+        const nextDate = new Date(vaccine.nextDate);
         return nextDate >= today && nextDate <= thirtyDaysFromNow;
     });
 }
 
 function isVaccineUpcoming(vaccine) {
-    if (!vaccine.next_date) return false;
+    if (!vaccine.nextDate) return false;
     const today = new Date();
     today.setHours(0, 0, 0, 0);
     const thirtyDaysFromNow = new Date(today.getTime() + (30 * 24 * 60 * 60 * 1000));
-    const nextDate = new Date(vaccine.next_date);
+    const nextDate = new Date(vaccine.nextDate);
     return nextDate >= today && nextDate <= thirtyDaysFromNow;
 }
 
@@ -862,15 +862,15 @@ function openPetProfile(petId) {
     const pet = pets.find(p => p.id === petId);
     if (!pet) return;
 
-    const isOwner = currentUser && currentUser.user.id === pet.owner_id;
-    const petImage = pet.photo_url ? `<img src="${pet.photo_url}" alt="Foto de ${pet.name}" style="width: 100%; height: 100%; object-fit: cover;">` : getSpeciesIcon(pet.species);
+    const isOwner = currentUser && currentUser.user.id === pet.ownerId;
+    const petImage = pet.photoUrl ? `<img src="${pet.photoUrl}" alt="Foto de ${pet.name}" style="width: 100%; height: 100%; object-fit: cover;">` : getSpeciesIcon(pet.species);
 
     let adoptionButton = '';
     if (pet.type === 'adoption' && pet.status === 'available' && !isOwner) {
         if (currentUser) {
             adoptionButton = `
                 <div style="text-align: center; margin-top: 25px;">
-                    <button class="btn" onclick="showContact(${pet.owner_id}, '${pet.owner_name}', '${pet.owner_phone}', '${pet.owner_email}')" style="background: #38a169; width: auto; padding: 15px 30px;">
+                    <button class="btn" onclick="showContact(${pet.ownerId}, '${pet.ownerName}', '${pet.ownerPhone}', '${pet.ownerEmail}')" style="background: #38a169; width: auto; padding: 15px 30px;">
                         💬 Entrar em Contato para Adoção
                     </button>
                 </div>`;
@@ -897,7 +897,7 @@ function openPetProfile(petId) {
                 ${petImage}
             </div>
             <h2 style="color: #2d3748; margin-bottom: 10px;">${pet.name}</h2>
-            <p style="color: #718096;">Cadastrado em ${formatDate(pet.created_at)}</p>
+            <p style="color: #718096;">Cadastrado em ${formatDate(pet.createdAt)}</p>
             ${getStatusIndicator(pet)}
         </div>
         <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 15px; margin-bottom: 25px;">
@@ -920,7 +920,7 @@ function openPetProfile(petId) {
                             <p>Aplicada em ${formatDate(vaccine.date)}</p>
                         </div>
                         <div class="vaccination-date ${isVaccineUpcoming(vaccine) ? 'upcoming' : ''}">
-                            ${vaccine.next_date ? `Próxima: ${formatDate(vaccine.next_date)}` : 'Dose única'}
+                            ${vaccine.nextDate ? `Próxima: ${formatDate(vaccine.nextDate)}` : 'Dose única'}
                         </div>
                     </div>
                 `).join('') : `
@@ -1122,10 +1122,11 @@ function showPostForm(postId = null) {
         button.textContent = 'Publicar';
         hiddenId.value = '';
         deleteButtonWrapper.style.display = 'none';
+        // API Unidade IV: Preenche localização ao criar novo post
         getDeviceLocationForPostForm();
     } else {
         const post = blogPosts.find(p => p.id === postId);
-        if (post && post.owner_id === currentUser.user.id) {
+        if (post && post.ownerId === currentUser.user.id) {
             title.textContent = 'Editar Post';
             button.textContent = 'Atualizar';
             hiddenId.value = post.id;
@@ -1143,8 +1144,6 @@ function showPostForm(postId = null) {
         }
     }
 }
-
-// (A segunda função handlePostSubmit foi removida por ser duplicada e incorreta)
 
 async function deletePostFromForm() {
     const postId = document.getElementById('postEditId').value;
@@ -1168,8 +1167,9 @@ async function toggleLike(postId) {
     }
 
     try {
+        // A API cuida da lógica de adicionar/remover
         await apiFetch(`/blog/${postId}/like`, { method: 'POST' });
-        loadBlogPosts(); 
+        loadBlogPosts(); // Simples, mas recarrega tudo
         
     } catch (error) {
         alert(`Erro ao curtir: ${error.message}`);
@@ -1196,7 +1196,7 @@ async function handleCommentSubmit(event, postId) {
         });
         
         input.value = '';
-        loadBlogPosts(); 
+        loadBlogPosts(); // Recarrega para mostrar o novo comentário
     } catch (error) {
         alert(`Erro ao comentar: ${error.message}`);
     }
@@ -1207,6 +1207,10 @@ async function handleCommentSubmit(event, postId) {
 // 10. INTEGRAÇÃO APIs UNIDADE IV (Geolocalização e Mapas)
 // ===================================================================
 
+/**
+ * API de Geolocalização (Sensor)
+ * Tenta obter a localização e preencher o formulário de POST.
+ */
 function getDeviceLocationForPostForm() {
     const locationInput = document.getElementById('postLocation');
     if (!locationInput) return;
@@ -1217,6 +1221,7 @@ function getDeviceLocationForPostForm() {
             async (position) => {
                 const lat = position.coords.latitude;
                 const lon = position.coords.longitude;
+                // Usa API de "Geocoding Reverso" (OpenStreetMap)
                 try {
                     const response = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lon}`);
                     const data = await response.json();
@@ -1233,12 +1238,17 @@ function getDeviceLocationForPostForm() {
                 console.warn("Erro ao obter localização:", error.message);
                 locationInput.placeholder = "Ex: Manaus, AM";
             },
-            { timeout: 5000 }
+            { timeout: 5000 } // Timeout de 5 segundos
         );
     }
 }
 
+/**
+ * API de Geolocalização (Sensor)
+ * Tenta obter lat/lon e preencher o formulário de SERVIÇO.
+ */
 function getDeviceLocationForServiceForm() {
+    // Adiciona campos hidden ao formulário de serviço
     const form = document.getElementById('serviceRegisterForm');
     if (!document.getElementById('serviceLatitude')) {
         form.insertAdjacentHTML('beforeend', `
@@ -1267,6 +1277,10 @@ function getDeviceLocationForServiceForm() {
     }
 }
 
+/**
+ * API de Mapas (Leaflet.js)
+ * Mostra o mapa do serviço no modal de contato.
+ */
 function showServiceMapInModal(service) {
     if (!service.latitude || !service.longitude) {
         alert('Este serviço não possui localização no mapa.');
@@ -1284,6 +1298,8 @@ function showServiceMapInModal(service) {
     
     document.getElementById('contactModal').classList.add('active');
 
+    // Leaflet precisa que o container esteja visível para renderizar
+    // Usamos um timeout para garantir
     setTimeout(() => {
         try {
             const map = L.map('serviceMapContainer').setView([service.latitude, service.longitude], 16);
@@ -1308,7 +1324,6 @@ function showServiceMapInModal(service) {
 // ===================================================================
 
 document.addEventListener('DOMContentLoaded', function() {
-    // Formulários
     document.getElementById('loginForm').addEventListener('submit', handleLogin);
     document.getElementById('registerForm').addEventListener('submit', handleRegister);
     document.getElementById('petRegisterForm').addEventListener('submit', handlePetRegistration);
@@ -1316,7 +1331,6 @@ document.addEventListener('DOMContentLoaded', function() {
     document.getElementById('serviceRegisterForm').addEventListener('submit', handleServiceRegistration);
     document.getElementById('postForm').addEventListener('submit', handlePostSubmit);
 
-    // Fechar modais
     document.querySelectorAll('.modal').forEach(modal => {
         modal.addEventListener('click', function(e) {
             if (e.target === modal) {
@@ -1329,8 +1343,7 @@ document.addEventListener('DOMContentLoaded', function() {
     const today = new Date().toISOString().split('T')[0];
     document.getElementById('vaccineDate').max = today;
 
-    // Inicialização
-    checkLocalStorageLogin(); 
+    checkLocalStorageLogin(); // Verifica se já está logado
     updateAuthButtons();
-    loadAdoptionPets(); 
+    loadAdoptionPets(); // Carrega a página inicial de adoção
 });
