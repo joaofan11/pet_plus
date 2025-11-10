@@ -18,46 +18,7 @@ let blogPosts = [];
 // 2. FUNÇÕES AUXILIARES DE API
 // ===================================================================
 
-/**
- * Função centralizada para requisições fetch,
- * lidando com o token de autenticação automaticamente.
- */
-async function apiFetch(endpoint, options = {}) {
-    const headers = {
-        'Content-Type': 'application/json',
-        ...options.headers,
-    };
-
-    // Adiciona o token de autenticação se o usuário estiver logado
-    if (currentUser && currentUser.token) {
-        headers['Authorization'] = `Bearer ${currentUser.token}`;
-    }
-
-    try {
-        const response = await fetch(`${API_URL}${endpoint}`, {
-            ...options,
-            headers,
-        });
-
-        if (!response.ok) {
-            // Tenta extrair a mensagem de erro do backend
-            const errorData = await response.json();
-            console.error('Erro na API:', errorData);
-            throw new Error(errorData.message || `HTTP error! status: ${response.status}`);
-        }
-        
-        // Retorna nada em caso de 204 (No Content)
-        if (response.status === 204) {
-            return null;
-        }
-
-        return await response.json();
-    } catch (error) {
-        console.error(`Falha no fetch para ${endpoint}:`, error);
-        // Propaga o erro para a função que chamou
-        throw error; 
-    }
-}
+// (A primeira função apiFetch foi removida por ser duplicada)
 
 // ===================================================================
 // 3. FUNÇÕES UTILITÁRIAS (DOM)
@@ -89,7 +50,6 @@ function formatDateTime(date) {
     });
 }
 
-// ... (getSpeciesIcon, getAgeLabel, getSizeLabel, getGenderLabel - permanecem iguais) ...
 function getSpeciesIcon(species) {
     const icons = { dog: '🐕', cat: '🐱' };
     return icons[species] || '🐾';
@@ -203,7 +163,6 @@ async function handleRegister(event) {
         return;
     }
     
-    // (Validações de front-end permanecem)
     if (password !== confirmPassword) {
         showMessage('registerMessage', 'As senhas não coincidem.', 'error');
         return;
@@ -245,7 +204,6 @@ function checkLocalStorageLogin() {
     const authData = localStorage.getItem('petplus_auth');
     if (authData) {
         currentUser = JSON.parse(authData);
-        // TODO: Seria bom verificar se o token ainda é válido
         updateAuthButtons();
     }
 }
@@ -272,7 +230,6 @@ function showPetRegisterPage(petId = null) {
         hiddenId.value = '';
         deleteButtonWrapper.style.display = 'none';
     } else {
-        // Encontra o pet no array local (que foi carregado pelo loadMyPets)
         const pet = pets.find(p => p.id === petId);
         if (pet && pet.owner_id === currentUser.user.id) {
             title.textContent = 'Atualizar Pet';
@@ -288,7 +245,6 @@ function showPetRegisterPage(petId = null) {
             document.getElementById('petSize').value = pet.size;
             document.getElementById('petGender').value = pet.gender;
             document.getElementById('petDescription').value = pet.description;
-            // 'pet.photo_url' é o campo do DB, 'pet.photo' era o mock
         } else {
             alert("Pet não encontrado ou você não tem permissão para editá-lo.");
             return;
@@ -309,24 +265,18 @@ async function handlePetRegistration(event) {
     const form = event.target;
     const petId = document.getElementById('petEditId').value;
     
-    // 1. Criar um objeto FormData a partir do formulário HTML
-    // O FormData apanha automaticamente todos os campos de texto E o ficheiro de imagem
     const formData = new FormData(form);
 
-    // Validação de campos (ainda importante para o utilizador)
     if (!formData.get('name') || !formData.get('type') || !formData.get('species') || !formData.get('breed') || 
         !formData.get('age') || !formData.get('size') || !formData.get('gender') || !formData.get('description')) {
         showMessage('petRegisterMessage', 'Por favor, preencha todos os campos.', 'error');
         return;
     }
 
-    // Se estiver a editar, precisamos de manter a URL da foto antiga,
-    // caso o utilizador não queira alterá-la.
     if (petId) {
         const pet = pets.find(p => p.id === parseInt(petId));
-        // O backend espera 'photoUrl' (graças às nossas correções)
         if (pet && pet.photoUrl) {
-            formData.append('photoUrl', pet.photoUrl); // Envia a URL antiga
+            formData.append('photoUrl', pet.photoUrl); 
         }
     }
 
@@ -336,26 +286,18 @@ async function handlePetRegistration(event) {
         const endpoint = petId ? `/pets/${petId}` : '/pets';
         const method = petId ? 'PUT' : 'POST';
 
-        // 3. Fazer o fetch com FormData
-        // IMPORTANTE: NÃO defina o 'Content-Type': 'application/json'.
-        // O navegador define 'multipart/form-data' automaticamente
-        // quando o 'body' é um FormData.
-        
-        // Vamos usar a função 'apiFetch' adaptada para FormData
         responseData = await apiFetch(endpoint, {
             method: method,
             body: formData,
-            isFormData: true // Flag para a nossa função apiFetch
+            isFormData: true 
         });
 
-        // 4. Sucesso
         const message = petId ? 'atualizado' : 'cadastrado';
         showMessage('petRegisterMessage', `${responseData.name} foi ${message} com sucesso!`, 'success');
         
         form.reset();
         document.getElementById('petEditId').value = '';
         
-        // Recarrega a lista de pets correta
         setTimeout(() => {
             if (responseData.type === 'adoption') {
                 showPage('adoption');
@@ -369,7 +311,7 @@ async function handlePetRegistration(event) {
     }
 }
 
-// SUBSTITUA a sua função handlePostSubmit por esta
+// Esta é a versão CORRETA de handlePostSubmit
 async function handlePostSubmit(event) {
     event.preventDefault();
     
@@ -387,7 +329,6 @@ async function handlePostSubmit(event) {
         return;
     }
     
-    // Lógica para manter a foto antiga
     if (postId) {
         const post = blogPosts.find(p => p.id === parseInt(postId));
         if (post && post.photoUrl) {
@@ -399,7 +340,6 @@ async function handlePostSubmit(event) {
         const endpoint = postId ? `/blog/${postId}` : '/blog';
         const method = postId ? 'PUT' : 'POST';
 
-        // Usa apiFetch com a flag FormData
         await apiFetch(endpoint, {
             method: method,
             body: formData,
@@ -416,23 +356,20 @@ async function handlePostSubmit(event) {
     }
 }
 
-// SUBSTITUA a sua função apiFetch por esta
+// Esta é a versão CORRETA de apiFetch
 /**
  * Função centralizada para requisições fetch,
  * lidando com o token de autenticação e FormData.
  */
 async function apiFetch(endpoint, options = {}) {
     const headers = {
-        // NÃO defina 'Content-Type' por defeito
         ...options.headers,
     };
 
-    // Adiciona o token de autenticação se o usuário estiver logado
     if (currentUser && currentUser.token) {
         headers['Authorization'] = `Bearer ${currentUser.token}`;
     }
 
-    // Se NÃO for FormData, define Content-Type como JSON
     if (!options.isFormData) {
         headers['Content-Type'] = 'application/json';
     }
@@ -465,11 +402,10 @@ async function loadAdoptionPets() {
     container.innerHTML = `<div class="loading"><div class="spinner"></div></div>`;
     
     try {
-        // Passa filtros pela URL
         const filters = getPetFilters();
         const adoptionPets = await apiFetch(`/pets/adoption?${filters}`);
         
-        pets = adoptionPets; // Atualiza o cache local
+        pets = adoptionPets; 
         
         if (adoptionPets.length === 0) {
             container.innerHTML = `
@@ -530,20 +466,15 @@ function getStatusIndicator(pet) {
 
 function displayPets(petsToShow, container, isAdoptionView) {
     container.innerHTML = petsToShow.map(pet => {
-        // 'pet.ownerName' e 'pet.ownerId' vêm da API (após a nossa correção)
         const ownerName = pet.ownerName || 'Dono';
         const upcomingVaccines = getUpcomingVaccines(pet);
         
-        // --- A LINHA CORRIGIDA ESTÁ AQUI ---
-        // Trocámos 'pet.photo' por 'pet.photoUrl'
         const petImage = pet.photoUrl ? `<img src="${pet.photoUrl}" alt="Foto de ${pet.name}">` : getSpeciesIcon(pet.species);
-        // --- FIM DA CORREÇÃO ---
         
         let actionButtons = '';
         if (isAdoptionView) {
             actionButtons = `<button class="btn btn-small" onclick="openPetProfile(${pet.id})">Ver Perfil</button>`;
             if (currentUser) {
-                // 'pet.ownerId' (camelCase) está agora correto
                 actionButtons += ` <button class="btn btn-small" onclick="showContact(${pet.ownerId}, '${pet.ownerName}', '${pet.ownerPhone}', '${pet.ownerEmail}')" style="background: #38a169;">Contato</button>`;
             } else {
                 actionButtons += ` <button class="btn btn-small" onclick="showPage('login')" style="background: #a0aec0;">Logar para Contato</button>`;
@@ -551,7 +482,6 @@ function displayPets(petsToShow, container, isAdoptionView) {
         } else { // My Pets View
             actionButtons = `<button class="btn btn-small" onclick="openPetProfile(${pet.id})">Ver Perfil</button>`;
             
-            // Esta verificação agora funciona
             if (currentUser && pet.ownerId === currentUser.user.id) {
                  actionButtons += `<button class="btn btn-small" onclick="showPetRegisterPage(${pet.id})" style="background: #4299e1;">Editar</button>`;
             }
@@ -640,9 +570,6 @@ function getPetFilters() {
 }
 
 function filterPets() {
-    // Agora, em vez de filtrar o array,
-    // apenas chamamos loadAdoptionPets, que lerá os filtros
-    // e os enviará para a API
     loadAdoptionPets();
 }
 
@@ -665,11 +592,17 @@ async function loadServices() {
     
     container.innerHTML = `<div class="loading"><div class="spinner"></div></div>`;
     
-    document.getElementById('serviceSearchFilter').value = '';
-    document.getElementById('serviceCategoryFilter').value = '';
+    // Lê os filtros do DOM
+    const searchTerm = document.getElementById('serviceSearchFilter')?.value || '';
+    const category = document.getElementById('serviceCategoryFilter')?.value || '';
+    
+    const params = new URLSearchParams();
+    if (searchTerm) params.append('search', searchTerm);
+    if (category) params.append('category', category);
 
     try {
-        const services = await apiFetch('/services');
+        // Passa os filtros para a API
+        const services = await apiFetch(`/services?${params.toString()}`);
         serviceProviders = services; // Atualiza cache local
         displayServiceProviders(services, container);
     } catch (error) {
@@ -693,7 +626,6 @@ function displayServiceProviders(providersToShow, container) {
             let providerDetails = `<p><strong>Descrição:</strong> ${provider.description}</p>`;
             let providerActionsContent = '';
             
-            // O backend agora controla quais dados vemos
             const isLoggedIn = (provider.phone !== "Faça login para ver");
 
             if (isLoggedIn) {
@@ -703,7 +635,6 @@ function displayServiceProviders(providersToShow, container) {
                         📞 Ligar (${provider.phone})
                     </a>`;
                 
-                // Botão de API de Mapas (Unidade IV)
                 if (provider.latitude && provider.longitude) {
                     providerActionsContent += `
                         <button class="btn btn-small" onclick='showServiceMapInModal(${JSON.stringify(provider)})' style="background: #3182ce;">
@@ -748,24 +679,10 @@ function displayServiceProviders(providersToShow, container) {
     }
 }
 
-async function filterServices() {
-    const container = document.getElementById('servicesGrid');
-    const searchTerm = document.getElementById('serviceSearchFilter').value;
-    const category = document.getElementById('serviceCategoryFilter').value;
-    
-    const params = new URLSearchParams();
-    if (searchTerm) params.append('search', searchTerm);
-    if (category) params.append('category', category);
-
-    container.innerHTML = `<div class="loading"><div class="spinner"></div></div>`;
-    
-    try {
-        const services = await apiFetch(`/services?${params.toString()}`);
-        serviceProviders = services;
-        displayServiceProviders(services, container);
-    } catch (error) {
-        container.innerHTML = `<div class="empty-state"><h3>Erro ao filtrar serviços.</h3></div>`;
-    }
+function filterServices() {
+    // A lógica de filtro foi movida para loadServices()
+    // para evitar duplicação de código.
+    loadServices();
 }
 
 
@@ -783,7 +700,6 @@ function showServiceRegisterPage(serviceId = null) {
         button.textContent = 'Cadastrar Serviço';
         hiddenId.value = '';
         deleteButtonWrapper.style.display = 'none';
-        // Tenta pegar localização (API Unidade IV)
         getDeviceLocationForServiceForm();
     } else {
         const service = serviceProviders.find(s => s.id === serviceId);
@@ -799,7 +715,6 @@ function showServiceRegisterPage(serviceId = null) {
             document.getElementById('servicePhone').value = service.phone;
             document.getElementById('serviceAddress').value = service.address;
             document.getElementById('serviceDescription').value = service.description;
-            // Adicionar campos de lat/lon se existirem
         } else {
             alert("Serviço não encontrado ou você não tem permissão para editá-lo.");
             return;
@@ -822,7 +737,6 @@ async function handleServiceRegistration(event) {
     const serviceData = Object.fromEntries(formData);
     const serviceId = document.getElementById('serviceEditId').value;
     
-    // Pega lat/lon dos campos escondidos (preenchidos pela API de geolocalização)
     serviceData.latitude = document.getElementById('serviceLatitude')?.value || null;
     serviceData.longitude = document.getElementById('serviceLongitude')?.value || null;
 
@@ -903,24 +817,22 @@ async function handleVaccination(event) {
             body: JSON.stringify(vaccineData)
         });
         
-        // Atualiza o pet no array local
         const pet = pets.find(p => p.id === petId);
         if (pet) {
             pet.vaccines.push(newVaccine);
         }
         
         closeVaccinationModal();
-        openPetProfile(petId); // Reabre o perfil com a vacina
+        openPetProfile(petId); 
         
         if (document.getElementById('my-pets').classList.contains('active')) {
-            loadMyPets(); // Recarrega a lista para mostrar o alerta
+            loadMyPets(); 
         }
     } catch (error) {
         alert(`Erro ao adicionar vacina: ${error.message}`);
     }
 }
 
-// ... (getUpcomingVaccines, isVaccineUpcoming - permanecem iguais) ...
 function getUpcomingVaccines(pet) {
     const today = new Date();
     today.setHours(0, 0, 0, 0);
@@ -950,7 +862,6 @@ function openPetProfile(petId) {
     const pet = pets.find(p => p.id === petId);
     if (!pet) return;
 
-    // 'pet.owner_name' é o nome, 'pet.owner_id' é o ID
     const isOwner = currentUser && currentUser.user.id === pet.owner_id;
     const petImage = pet.photo_url ? `<img src="${pet.photo_url}" alt="Foto de ${pet.name}" style="width: 100%; height: 100%; object-fit: cover;">` : getSpeciesIcon(pet.species);
 
@@ -1040,9 +951,6 @@ function closeVaccinationModal() {
 }
 
 function showContact(ownerId, ownerName, ownerPhone, ownerEmail) {
-    // Não precisamos mais buscar no array 'users', 
-    // os dados vêm da API
-    
     document.getElementById('contactModalContent').innerHTML = `
         <div style="text-align: center; margin-bottom: 30px;">
             <div style="font-size: 4rem; margin-bottom: 15px;">👤</div>
@@ -1126,16 +1034,12 @@ function displayBlogPosts(posts, container) {
     }
 
     container.innerHTML = posts.map(post => {
-        // 'ownerName' e 'ownerId' vêm da API (após a nossa correção)
         const ownerName = post.ownerName || 'Usuário';
         const isOwner = currentUser && currentUser.user.id === post.ownerId;
 
-        // --- A LINHA CORRIGIDA ESTÁ AQUI ---
-        // Trocámos 'post.photo' por 'post.photoUrl'
         const postImageHTML = post.photoUrl 
             ? `<img src="${post.photoUrl}" alt="Foto do post" class="post-image">` 
             : '';
-        // --- FIM DA CORREÇÃO ---
 
         const postLocationHTML = post.location 
             ? `<div class="post-location">📍 ${post.location}</div>` 
@@ -1147,13 +1051,11 @@ function displayBlogPosts(posts, container) {
 
         const avatarLetter = ownerName.charAt(0).toUpperCase();
 
-        // 'post.likes' agora é um array de IDs
         const userHasLiked = currentUser && post.likes.includes(currentUser.user.id);
         const likeBtnActive = userHasLiked ? 'active' : '';
         const likeCount = post.likes.length;
         const likeText = likeCount === 1 ? 'curtida' : 'curtidas';
 
-        // 'post.comments' agora vem da API
         const commentsHTML = post.comments.map(comment => `
             <div class="comment-item">
                 <strong class="comment-author">${comment.ownerName || 'Usuário'}</strong>
@@ -1220,7 +1122,6 @@ function showPostForm(postId = null) {
         button.textContent = 'Publicar';
         hiddenId.value = '';
         deleteButtonWrapper.style.display = 'none';
-        // API Unidade IV: Preenche localização ao criar novo post
         getDeviceLocationForPostForm();
     } else {
         const post = blogPosts.find(p => p.id === postId);
@@ -1243,61 +1144,7 @@ function showPostForm(postId = null) {
     }
 }
 
-async function handlePostSubmit(event) {
-    event.preventDefault();
-    
-    if (!currentUser) {
-        showMessage('postMessage', 'Você precisa estar logado para postar.', 'error');
-        return;
-    }
-
-    const content = document.getElementById('postContent').value.trim();
-    const location = document.getElementById('postLocation').value.trim();
-    const photoFile = document.getElementById('postPhoto').files[0];
-    const postId = document.getElementById('postEditId').value;
-    
-    // Lógica de foto (simplificada)
-    let photoURL = null;
-    if (photoFile) {
-        // photoURL = URL.createObjectURL(photoFile); // Isso é local
-        // Em um app real, faríamos upload para um S3 e pegaríamos a URL
-        photoURL = "https://exemplo.com/imagem_upload.jpg"; // Mock de URL
-    }
-
-    if (!content) {
-        showMessage('postMessage', 'O conteúdo do post não pode estar vazio.', 'error');
-        return;
-    }
-
-    const postData = {
-        content,
-        location,
-        photo: photoURL
-    };
-
-    try {
-        if (postId) {
-            // Atualizar (PUT)
-            await apiFetch(`/blog/${postId}`, {
-                method: 'PUT',
-                body: JSON.stringify(postData)
-            });
-            showMessage('postMessage', 'Post atualizado com sucesso!', 'success');
-        } else {
-            // Criar (POST)
-            await apiFetch('/blog', {
-                method: 'POST',
-                body: JSON.stringify(postData)
-            });
-            showMessage('postMessage', 'Post publicado com sucesso!', 'success');
-        }
-        
-        toggleNewPostForm(false);
-        loadBlogPosts(); // Recarrega o feed
-    } catch (error) {
-        showMessage('postMessage', `Erro: ${error.message}`, 'error');
-    }
-}
+// (A segunda função handlePostSubmit foi removida por ser duplicada e incorreta)
 
 async function deletePostFromForm() {
     const postId = document.getElementById('postEditId').value;
@@ -1321,12 +1168,8 @@ async function toggleLike(postId) {
     }
 
     try {
-        // A API cuida da lógica de adicionar/remover
         await apiFetch(`/blog/${postId}/like`, { method: 'POST' });
-        
-        // Atualiza o front-end otimisticamente (ou recarrega)
-        loadBlogPosts(); // Simples, mas recarrega tudo
-        // TODO: Para melhor performance, atualizar só o post local
+        loadBlogPosts(); 
         
     } catch (error) {
         alert(`Erro ao curtir: ${error.message}`);
@@ -1353,7 +1196,7 @@ async function handleCommentSubmit(event, postId) {
         });
         
         input.value = '';
-        loadBlogPosts(); // Recarrega para mostrar o novo comentário
+        loadBlogPosts(); 
     } catch (error) {
         alert(`Erro ao comentar: ${error.message}`);
     }
@@ -1364,10 +1207,6 @@ async function handleCommentSubmit(event, postId) {
 // 10. INTEGRAÇÃO APIs UNIDADE IV (Geolocalização e Mapas)
 // ===================================================================
 
-/**
- * API de Geolocalização (Sensor)
- * Tenta obter a localização e preencher o formulário de POST.
- */
 function getDeviceLocationForPostForm() {
     const locationInput = document.getElementById('postLocation');
     if (!locationInput) return;
@@ -1378,7 +1217,6 @@ function getDeviceLocationForPostForm() {
             async (position) => {
                 const lat = position.coords.latitude;
                 const lon = position.coords.longitude;
-                // Usa API de "Geocoding Reverso" (OpenStreetMap)
                 try {
                     const response = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lon}`);
                     const data = await response.json();
@@ -1395,17 +1233,12 @@ function getDeviceLocationForPostForm() {
                 console.warn("Erro ao obter localização:", error.message);
                 locationInput.placeholder = "Ex: Manaus, AM";
             },
-            { timeout: 5000 } // Timeout de 5 segundos
+            { timeout: 5000 }
         );
     }
 }
 
-/**
- * API de Geolocalização (Sensor)
- * Tenta obter lat/lon e preencher o formulário de SERVIÇO.
- */
 function getDeviceLocationForServiceForm() {
-    // Adiciona campos hidden ao formulário de serviço
     const form = document.getElementById('serviceRegisterForm');
     if (!document.getElementById('serviceLatitude')) {
         form.insertAdjacentHTML('beforeend', `
@@ -1434,10 +1267,6 @@ function getDeviceLocationForServiceForm() {
     }
 }
 
-/**
- * API de Mapas (Leaflet.js)
- * Mostra o mapa do serviço no modal de contato.
- */
 function showServiceMapInModal(service) {
     if (!service.latitude || !service.longitude) {
         alert('Este serviço não possui localização no mapa.');
@@ -1455,8 +1284,6 @@ function showServiceMapInModal(service) {
     
     document.getElementById('contactModal').classList.add('active');
 
-    // Leaflet precisa que o container esteja visível para renderizar
-    // Usamos um timeout para garantir
     setTimeout(() => {
         try {
             const map = L.map('serviceMapContainer').setView([service.latitude, service.longitude], 16);
@@ -1503,7 +1330,7 @@ document.addEventListener('DOMContentLoaded', function() {
     document.getElementById('vaccineDate').max = today;
 
     // Inicialização
-    checkLocalStorageLogin(); // Verifica se já está logado
+    checkLocalStorageLogin(); 
     updateAuthButtons();
-    loadAdoptionPets(); // Carrega a página inicial de adoção
+    loadAdoptionPets(); 
 });
