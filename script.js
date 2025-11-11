@@ -266,7 +266,7 @@ function showPetRegisterPage(petId = null) {
         // Encontra o pet no array local
         const pet = pets.find(p => p.id === petId);
         
-        if (pet && pet.ownerId == currentUser.user.id) {
+        if if (pet && pet.ownerId == currentUser.user.userId) {
             title.textContent = 'Atualizar Pet';
             button.textContent = 'Atualizar Pet';
             hiddenId.value = pet.id;
@@ -480,7 +480,7 @@ function displayPets(petsToShow, container, isAdoptionView) {
         } else { // My Pets View
             actionButtons = `<button class="btn btn-small" onclick="openPetProfile(${pet.id})">Ver Perfil</button>`;
             
-            if (currentUser && pet.ownerId == currentUser.user.id) {
+            if (currentUser && pet.ownerId == currentUser.user.userId) {
                  actionButtons += `<button class="btn btn-small" onclick="showPetRegisterPage(${pet.id})" style="background: #4299e1;">Editar</button>`;
             }
 
@@ -641,7 +641,7 @@ function displayServiceProviders(providersToShow, container) {
                         </button>`;
                 }
                 
-                if (currentUser && currentUser.user.id == provider.ownerId) {
+               if (currentUser && currentUser.user.userId == provider.ownerId) {
                     providerActionsContent += `
                         <button class="btn btn-small" onclick="showServiceRegisterPage(${provider.id})" style="background: #4299e1;">
                             Editar
@@ -701,7 +701,7 @@ function showServiceRegisterPage(serviceId = null) {
         getDeviceLocationForServiceForm();
     } else {
         const service = serviceProviders.find(s => s.id === serviceId);
-        if (service && service.ownerId == currentUser.user.id) {
+           if (service && service.ownerId == currentUser.user.userId) {
             title.textContent = 'Atualizar Serviço';
             button.textContent = 'Atualizar Serviço';
             hiddenId.value = service.id;
@@ -862,7 +862,7 @@ function openPetProfile(petId) {
     const pet = pets.find(p => p.id === petId);
     if (!pet) return;
 
-    const isOwner = currentUser && currentUser.user.id == pet.ownerId;
+   const isOwner = currentUser && currentUser.user.userId == pet.ownerId;
     const petImage = pet.photoUrl ? `<img src="${pet.photoUrl}" alt="Foto de ${pet.name}" style="width: 100%; height: 100%; object-fit: cover;">` : getSpeciesIcon(pet.species);
 
     let adoptionButton = '';
@@ -1035,7 +1035,7 @@ function displayBlogPosts(posts, container) {
 
     container.innerHTML = posts.map(post => {
         const ownerName = post.ownerName || 'Usuário';
-        const isOwner = currentUser && currentUser.user.id == post.ownerId;
+        const isOwner = currentUser && currentUser.user.userId == post.ownerId;
 
         const postImageHTML = post.photoUrl 
             ? `<img src="${post.photoUrl}" alt="Foto do post" class="post-image">` 
@@ -1126,7 +1126,7 @@ function showPostForm(postId = null) {
         getDeviceLocationForPostForm();
     } else {
         const post = blogPosts.find(p => p.id === postId);
-        if (post && post.ownerId == currentUser.user.id) {
+        if (post && post.ownerId == currentUser.user.userId) {
             title.textContent = 'Editar Post';
             button.textContent = 'Atualizar';
             hiddenId.value = post.id;
@@ -1347,4 +1347,5 @@ document.addEventListener('DOMContentLoaded', function() {
     updateAuthButtons();
     loadAdoptionPets(); // Carrega a página inicial de adoção
 });
+
 
