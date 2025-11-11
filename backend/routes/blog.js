@@ -29,6 +29,7 @@ router.get('/', async (req, res) => {
                    p.photo_url AS "photoUrl", 
                    p.created_at AS "createdAt", 
                    u.name AS "ownerName" 
+                   u.photo_url AS "ownerPhotoUrl"
             FROM posts p 
             JOIN users u ON p.owner_id = u.id 
             ORDER BY p.created_at DESC
@@ -150,5 +151,6 @@ router.post('/:postId/comment', checkAuth, async (req, res) => {
         res.status(201).json(finalComment);
     } catch (err) { console.error(err); res.status(500).json({ message: 'Erro ao adicionar comentário.' }); }
 });
+
 
 module.exports = router;
