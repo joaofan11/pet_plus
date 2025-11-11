@@ -3,16 +3,19 @@ const jwt = require('jsonwebtoken');
 
 module.exports = (req, res, next) => {
   try {
-    // Espera "Bearer TOKEN"
     const token = req.headers.authorization.split(" ")[1];
     const decodedToken = jwt.verify(token, process.env.JWT_SECRET);
     
-    // Adiciona os dados do usuário (ex: id) ao objeto 'req'
-    // para que as rotas subsequentes possam usá-lo
+    // Passa *todos* os dados do payload do token para req.userData
+    // Em vez de: { userId: decodedToken.userId, name: decodedToken.name }
+    // Fazemos:
     req.userData = { 
         userId: decodedToken.userId, 
-        name: decodedToken.name 
+        name: decodedToken.name,
+        email: decodedToken.email,
+        photoUrl: decodedToken.photoUrl
     };
+    
     next();
   } catch (error) {
     console.log(error);
