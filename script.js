@@ -207,10 +207,13 @@ async function handleRegister(event) {
     }
 
     try {
+        const form = document.getElementById('registerForm');
+        const formData = new FormData(form);
         const data = await apiFetch('/auth/register', {
             method: 'POST',
-            body: JSON.stringify({ name, email, phone, password, confirmPassword })
-        });
+            body: formData, // Envia o formulário como FormData
+            isFormData: true // Informa ao apiFetch para não usar Content-Type JSON
+    });
         
         showMessage('registerMessage', data.message, 'success');
         document.getElementById('registerForm').reset();
@@ -1347,6 +1350,7 @@ document.addEventListener('DOMContentLoaded', function() {
     updateAuthButtons();
     loadAdoptionPets(); // Carrega a página inicial de adoção
 });
+
 
 
 
