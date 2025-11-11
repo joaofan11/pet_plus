@@ -266,7 +266,7 @@ function showPetRegisterPage(petId = null) {
         // Encontra o pet no array local
         const pet = pets.find(p => p.id === petId);
         
-        if if (pet && pet.ownerId == currentUser.user.userId) {
+        if (pet && pet.ownerId == currentUser.user.userId) {
             title.textContent = 'Atualizar Pet';
             button.textContent = 'Atualizar Pet';
             hiddenId.value = pet.id;
@@ -1347,5 +1347,6 @@ document.addEventListener('DOMContentLoaded', function() {
     updateAuthButtons();
     loadAdoptionPets(); // Carrega a página inicial de adoção
 });
+
 
 
