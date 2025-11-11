@@ -1177,4 +1177,54 @@ footer {
     .post-body {
         padding: 0 20px 20px;
     }
+
+}
+
+/* --- Estilos do Avatar (Navbar) --- */
+.nav-avatar, .nav-avatar-default {
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    font-weight: 600;
+    color: white;
+    background: linear-gradient(135deg, #75b2c3, #80b37a);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.1rem;
+    overflow: hidden; /* Garante que a imagem fique contida */
+}
+
+.nav-avatar img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+/* Ajusta a div .user-info para alinhar a foto */
+.user-info {
+    gap: 12px;
+    padding: 6px 16px 6px 6px; /* Ajusta padding da esquerda */
+}
+
+/* --- Estilos do Avatar (Post do Blog) --- */
+/* Garante que o container do avatar se comporte bem */
+.post-author-avatar {
+    width: 45px;
+    height: 45px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, #75b2c3, #80b37a);
+    color: white;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 600;
+    font-size: 1.5rem;
+    overflow: hidden; /* Importante para a imagem */
+}
+
+.post-author-avatar-img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
 }
