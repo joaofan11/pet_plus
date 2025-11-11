@@ -133,6 +133,42 @@
             </div>
         </div>
 
+       <div id="profile-edit" class="page">
+            <div class="form-container">
+                <h2 class="form-title">Editar Perfil</h2>
+                <div id="profileMessage" class="message"></div>
+                
+                <form id="profileForm">
+                    <div class="form-group">
+                        <label for="profilePhoto">Foto de Perfil</label>
+                        <input type="file" id="profilePhoto" name="photo" accept="image/*">
+                        <small>Deixe em branco para manter a foto atual.</small>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="profileName">Nome Completo</label>
+                        <input type="text" id="profileName" name="name" required placeholder="Seu nome completo">
+                    </div>
+
+                    <div class="form-group">
+                        <label for="profileEmail">Email</label>
+                        <input type="email" id="profileEmail" name="email" required placeholder="seu@email.com">
+                    </div>
+
+                    <div class="form-group">
+                        <label for="profilePhone">Telefone</label>
+                        <input type="tel" id="profilePhone" name="phone" required placeholder="(00) 00000-0000">
+                    </div>
+
+                    <button type="submit" class="btn">Salvar Alterações</button>
+                    
+                    <button type="button" class="btn btn-secondary" onclick="showPage('landing')" style="margin-top: 15px;">
+                        Cancelar
+                    </button>
+                </form>
+            </div>
+        </div> 
+
         <div id="pet-register" class="page">
             <div class="form-container">
                 <h2 class="form-title" id="petFormTitle">Cadastrar Pet</h2>
@@ -452,3 +488,4 @@
 </body>
 
 </html>
+
