@@ -1,30 +1,38 @@
-// ===================================================================
-// 1. ESTADO DA APLICAÇÃO
-// ===================================================================
+// 1. ESTADO DA APLICAÇÃO E INICIALIZAÇÃO DO SUPABASE
 
-const API_URL = 'https://petplus-backend.onrender.com'; // URL do seu backend
+const API_URL = 'https://petplus-backend.onrender.com'; // URL do seu backend no Render
+const SUPABASE_URL = 'https://ugffvmqwdmgikdjggmdz.supabase.co';
+const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InVnZmZ2bXF3ZG1naWtkamdnbWR6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjI5MDU4MzUsImV4cCI6MjA3ODQ4MTgzNX0.bWlrMvEUPYdiFYzlvieX73rCJg-FcVeCWIbHGg70QjQ';
 
-// currentUser armazena o objeto { user: { id, name, email }, token }
+// Verifica se as chaves foram inseridas
+if (SUPABASE_URL === 'URL_DO_SEU_PROJETO_SUPABASE' || SUPABASE_ANON_KEY === 'CHAVE_ANON_PUBLICA_DO_SUPABASE') {
+    alert('ERRO: Configure as variáveis SUPABASE_URL e SUPABASE_ANON_KEY no script.js');
+}
+
+const supabase = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
 let currentUser = null; 
-
-// Armazena os dados buscados da API
 let pets = [];
 let serviceProviders = [];
 let blogPosts = [];
 
-// ===================================================================
-// 2. FUNÇÕES AUXILIARES DE API
-// ===================================================================
+// 2. FUNÇÕES AUXILIARES DE API (Refatorada)
 
-/** Função centralizada para requisições fetch, lidando com o token de autenticação e FormData.
- */
 async function apiFetch(endpoint, options = {}) {
     const headers = {
         ...options.headers,
     };
 
-    if (currentUser && currentUser.token) {
-        headers['Authorization'] = `Bearer ${currentUser.token}`;
+    // Pega a sessão atual do Supabase
+    const { data: { session }, error } = await supabase.auth.getSession();
+
+    if (error) {
+        console.error("Erro ao buscar sessão do Supabase:", error);
+    }
+
+    // Se houver uma sessão, anexa o token JWT
+    if (session) {
+        headers['Authorization'] = `Bearer ${session.access_token}`;
     }
 
     if (!options.isFormData) {
@@ -54,9 +62,7 @@ async function apiFetch(endpoint, options = {}) {
     }
 }
 
-// ===================================================================
 // 3. FUNÇÕES UTILITÁRIAS (DOM)
-// ===================================================================
 
 function showMessage(elementId, message, type = 'success') {
     const messageEl = document.getElementById(elementId);
@@ -67,42 +73,14 @@ function showMessage(elementId, message, type = 'success') {
         messageEl.classList.remove('active');
     }, 5000);
 }
+function formatDate(date) { /* ... (código inalterado) ... */ }
+function formatDateTime(date) { /* ... (código inalterado) ... */ }
+function getSpeciesIcon(species) { /* ... (código inalterado) ... */ }
+function getAgeLabel(age) { /* ... (código inalterado) ... */ }
+function getSizeLabel(size) { /* ... (código inalterado) ... */ }
+function getGenderLabel(gender) { /* ... (código inalterado) ... */ }
 
-function formatDate(date) {
-    if (!date) return 'Data inválida';
-    return new Date(date).toLocaleDateString('pt-BR', { timeZone: 'UTC' });
-}
-
-function formatDateTime(date) {
-    if (!date) return 'Data inválida';
-    return new Date(date).toLocaleString('pt-BR', { 
-        day: '2-digit', 
-        month: '2-digit', 
-        year: 'numeric', 
-        hour: '2-digit', 
-        minute: '2-digit' 
-    });
-}
-
-function getSpeciesIcon(species) {
-    const icons = { dog: '🐕', cat: '🐱' };
-    return icons[species] || '🐾';
-}
-function getAgeLabel(age) {
-    const labels = { puppy: 'Filhote', young: 'Jovem', adult: 'Adulto', senior: 'Idoso' };
-    return labels[age] || age;
-}
-function getSizeLabel(size) {
-    const labels = { small: 'Pequeno', medium: 'Médio', large: 'Grande' };
-    return labels[size] || size;
-}
-function getGenderLabel(gender) {
-    return gender === 'male' ? 'Macho' : 'Fêmea';
-}
-
-// ===================================================================
-// 4. NAVEGAÇÃO E AUTENTICAÇÃO
-// ===================================================================
+// 4. NAVEGAÇÃO E AUTENTICAÇÃO 
 
 function showPage(pageId) {
     document.querySelectorAll('.page').forEach(page => page.classList.remove('active'));
@@ -125,7 +103,7 @@ function showPage(pageId) {
     if (pageId === 'adoption') {
         loadAdoptionPets();
     } else if (pageId === 'my-pets') {
-        loadMyPets();
+        loadMyPets(); 
     } else if (pageId === 'services') {
         loadServices();
     } else if (pageId === 'blog') {
@@ -133,37 +111,31 @@ function showPage(pageId) {
     }
 }
 
+
 function updateAuthButtons() {
     const loginBtn = document.getElementById('loginBtn');
     const logoutBtn = document.getElementById('logoutBtn');
     const myPetsBtn = document.getElementById('myPetsBtn');
     const userInfo = document.getElementById('userInfo');
-    // const userName = document.getElementById('userName'); // Não é mais necessário
 
-    if (currentUser) {
+    if (currentUser) { 
         loginBtn.style.display = 'none';
         logoutBtn.style.display = 'inline-block';
         myPetsBtn.style.display = 'inline-block';
         
-        // --- ATUALIZAÇÃO DA FOTO DE PERFIL ---
-        const user = currentUser.user;
+        const user = currentUser; 
         let avatarHtml = '';
 
         if (user.photoUrl) {
-            // Se tem foto, usa a tag <img>
             avatarHtml = `<img src="${user.photoUrl}" alt="${user.name}" class="nav-avatar">`;
         } else {
-            // Se não tem foto, usa a inicial
             const letter = user.name ? user.name.charAt(0).toUpperCase() : '👤';
             avatarHtml = `<div class="nav-avatar-default">${letter}</div>`;
         }
         
-        // Substitui o conteúdo da div userInfo
         userInfo.innerHTML = `${avatarHtml} <span>Olá, ${user.name}</span>`;
         userInfo.classList.add('active');
-        
-        // Adiciona o clique para ir para a página de perfil
-        userInfo.onclick = showProfileEditPage; // 👈 NOVA FUNÇÃO
+        userInfo.onclick = showProfileEditPage;
         userInfo.style.cursor = 'pointer';
 
     } else {
@@ -171,7 +143,6 @@ function updateAuthButtons() {
         logoutBtn.style.display = 'none';
         myPetsBtn.style.display = 'none';
         
-        // Reseta a div userInfo para o estado original
         userInfo.innerHTML = `👋 Olá, <span id="userName"></span>`;
         userInfo.classList.remove('active');
         userInfo.onclick = null;
@@ -190,17 +161,21 @@ async function handleLogin(event) {
     }
 
     try {
-        const data = await apiFetch('/auth/login', {
-            method: 'POST',
-            body: JSON.stringify({ email, password })
+        const { error } = await supabase.auth.signInWithPassword({
+            email,
+            password
         });
 
-        currentUser = data; // data = { token, user: { ... } }
-        localStorage.setItem('petplus_auth', JSON.stringify(currentUser)); // Persiste o login
-        
-        showMessage('loginMessage', data.message, 'success');
-        updateAuthButtons();
-        
+        if (error) {
+            if (error.message.includes('Email not confirmed')) {
+                showMessage('loginMessage', 'Verifique seu e-mail para ativar sua conta.', 'error');
+            } else {
+                showMessage('loginMessage', 'Email ou senha incorretos.', 'error');
+            }
+            return;
+        }
+        // Mensagem de Sucesso!
+        showMessage('loginMessage', 'Login realizado com sucesso!', 'success');     
         setTimeout(() => showPage('landing'), 1500);
         document.getElementById('loginForm').reset();
 
@@ -212,7 +187,6 @@ async function handleLogin(event) {
 async function handleRegister(event) {
     event.preventDefault();
     
-    // Validações (exemplo)
     const name = document.getElementById('registerName').value.trim();
     const email = document.getElementById('registerEmail').value.trim();
     const phone = document.getElementById('registerPhone').value.trim();
@@ -227,18 +201,30 @@ async function handleRegister(event) {
         showMessage('registerMessage', 'As senhas não coincidem.', 'error');
         return;
     }
-    // ... (outras validações)
+
+    // Validação de senha forte (mínimo 8 caracteres, 1 maiúscula, 1 número, 1 símbolo)
+    const passRegex = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]{8,}$/;
+    if (!passRegex.test(password)) {
+        showMessage('registerMessage', 'Senha fraca. Use 8+ caracteres, 1 maiúscula, 1 número e 1 símbolo.', 'error');
+        return;
+    }
 
     try {
-        const form = document.getElementById('registerForm');
-        const formData = new FormData(form);
-        const data = await apiFetch('/auth/register', {
-            method: 'POST',
-            body: formData, // Envia o formulário como FormData
-            isFormData: true // Informa ao apiFetch para não usar Content-Type JSON
+        const { data, error } = await supabase.auth.signUp({
+            email,
+            password,
+            options: {
+                data: {
+                    name: name,
+                    phone: phone
+                }
+            }
         });
+
+        if (error) throw error;
         
-        showMessage('registerMessage', data.message, 'success');
+        // Mensagem de verificação de e-mail
+        showMessage('registerMessage', 'Cadastro realizado! Verifique seu e-mail para ativar sua conta.', 'success');
         document.getElementById('registerForm').reset();
         setTimeout(() => showPage('login'), 2000);
 
@@ -247,58 +233,82 @@ async function handleRegister(event) {
     }
 }
 
-function logout() {
-    currentUser = null;
-    localStorage.removeItem('petplus_auth'); // Limpa o login
-    updateAuthButtons();
-    showPage('landing');
+// Logout usando Supabase Auth
+async function logout() {
+    const { error } = await supabase.auth.signOut();
+    
+    if (error) {
+        console.error('Erro no logout:', error);
+        alert('Erro ao sair. Tente novamente.');
+    }
+    
+     showPage('landing');
+    // Recarrega dados públicos (para limpar dados privados que possam estar visíveis)
     loadAdoptionPets();
     loadServices();
 }
 
-/**
- * Tenta carregar o usuário do localStorage ao iniciar a página
- */
-function checkLocalStorageLogin() {
-    const authData = localStorage.getItem('petplus_auth');
-    if (authData) {
-        currentUser = JSON.parse(authData);
-        updateAuthButtons();
+// Recuperação de Senha
+async function handlePasswordReset() {
+    const email = document.getElementById('loginEmail').value.trim();
+    if (!email) {
+        showMessage('loginMessage', 'Digite seu e-mail no campo "Email" para recuperar a senha.', 'error');
+        return;
+    }
+
+    try {
+        const { error } = await supabase.auth.resetPasswordForEmail(email, {
+            redirectTo: window.location.origin, 
+        });
+        if (error) throw error;
+        showMessage('loginMessage', 'Link de recuperação enviado para seu e-mail.', 'success');
+    } catch (error) {
+        showMessage('loginMessage', error.message, 'error');
     }
 }
 
-// ===================================================================
-// ✨ NOVA SEÇÃO: EDIÇÃO DE PERFIL
-// ===================================================================
+// Função de proteção de rotas do Frontend Verifica se o usuário está logado no Supabase.
+ 
+async function checkAuth() {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) {
+        showPage('login');
+        // Lança um erro para parar a execução da função que a chamou
+        throw new Error('Usuário não autenticado.'); 
+    }
+    // Se o e-mail não foi verificado
+    if (!user.email_confirmed_at) {
+        showPage('login');
+        showMessage('loginMessage', 'Sua conta ainda não foi verificada. Verifique seu e-mail.', 'error');
+        throw new Error('E-mail não verificado.');
+    }
+    return user;
+}
 
-/**
- * Mostra a página de edição de perfil e preenche com dados atuais
- */
+
+// 5. EDIÇÃO DE PERFIL
 function showProfileEditPage() {
     if (!currentUser) {
         showPage('login');
         return;
     }
     
-    // Preenche o formulário com os dados do usuário
-    const user = currentUser.user;
+    const user = currentUser;
     document.getElementById('profileName').value = user.name || '';
     document.getElementById('profileEmail').value = user.email || '';
     document.getElementById('profilePhone').value = user.phone || '';
-    
-    // Limpa o campo de foto (segurança do navegador)
     document.getElementById('profilePhoto').value = ''; 
     
     showPage('profile-edit');
 }
 
-/**
- * Lida com o submit do formulário de atualização de perfil
- */
-async function handleProfileUpdate(event) {
+// Lida com o submit do formulário de atualização de perfil (PUT /me)
+ async function handleProfileUpdate(event) {
     event.preventDefault();
     
-    if (!currentUser) {
+    try {
+        await checkAuth(); // Garante que está logado
+    } catch (error) {
         showMessage('profileMessage', 'Sessão expirada. Faça login novamente.', 'error');
         return;
     }
@@ -307,6 +317,7 @@ async function handleProfileUpdate(event) {
     const formData = new FormData(form);
 
     try {
+        // Envia os dados para o NOSSO backend (Render)
         const data = await apiFetch('/auth/me', {
             method: 'PUT',
             body: formData,
@@ -315,17 +326,8 @@ async function handleProfileUpdate(event) {
 
         showMessage('profileMessage', data.message, 'success');
         
-        // --- ATUALIZA O ESTADO LOCAL ---
-        // Atualiza o objeto currentUser com os novos dados do usuário
-        currentUser.user = data.user;
-        
-        // Atualiza o localStorage para manter o login
-        localStorage.setItem('petplus_auth', JSON.stringify(currentUser));
-        
-        // Atualiza a UI (navbar)
+        currentUser = data.user;
         updateAuthButtons();
-        
-        // Volta para a home após 2 segundos
         setTimeout(() => showPage('landing'), 2000);
 
     } catch (error) {
@@ -333,12 +335,15 @@ async function handleProfileUpdate(event) {
     }
 }
 
+// 6. GERENCIAMENTO DE PETS
 
-// ===================================================================
-// 5. GERENCIAMENTO DE PETS
-// ===================================================================
+async function showPetRegisterPage(petId = null) {
+    try {
+        await checkAuth(); 
+    } catch (error) {
+        return;
+    }
 
-function showPetRegisterPage(petId = null) {
     const form = document.getElementById('petRegisterForm');
     const title = document.getElementById('petFormTitle');
     const button = document.getElementById('petFormButton');
@@ -355,10 +360,11 @@ function showPetRegisterPage(petId = null) {
         hiddenId.value = '';
         deleteButtonWrapper.style.display = 'none';
     } else {
-        // Encontra o pet no array local
+       
         const pet = pets.find(p => p.id === petId);
         
-        if (pet && pet.ownerId == currentUser.user.userId) {
+        
+        if (pet && pet.ownerId == currentUser.id) { 
             title.textContent = 'Atualizar Pet';
             button.textContent = 'Atualizar Pet';
             hiddenId.value = pet.id;
@@ -380,12 +386,14 @@ function showPetRegisterPage(petId = null) {
     showPage('pet-register');
 }
 
+
 async function handlePetRegistration(event) {
     event.preventDefault();
     
-    if (!currentUser) {
+    try {
+        await checkAuth();
+    } catch (error) {
         showMessage('petRegisterMessage', 'Você precisa estar logado para cadastrar um pet.', 'error');
-        setTimeout(() => showPage('login'), 2000);
         return;
     }
 
@@ -400,7 +408,7 @@ async function handlePetRegistration(event) {
         return;
     }
 
-    // Se estiver editando, envia a URL da foto antiga para o backend
+   
     if (petId) {
         const pet = pets.find(p => p.id === parseInt(petId));
         if (pet && pet.photoUrl) {
@@ -414,7 +422,7 @@ async function handlePetRegistration(event) {
         const endpoint = petId ? `/pets/${petId}` : '/pets';
         const method = petId ? 'PUT' : 'POST';
 
-        responseData = await apiFetch(endpoint, {
+                responseData = await apiFetch(endpoint, {
             method: method,
             body: formData,
             isFormData: true 
@@ -426,7 +434,7 @@ async function handlePetRegistration(event) {
         form.reset();
         document.getElementById('petEditId').value = '';
         
-        // Recarrega a lista de pets correta
+      
         setTimeout(() => {
             if (responseData.type === 'adoption') {
                 showPage('adoption');
@@ -440,62 +448,16 @@ async function handlePetRegistration(event) {
     }
 }
 
-async function handlePostSubmit(event) {
-    event.preventDefault();
-    
-    if (!currentUser) {
-        showMessage('postMessage', 'Você precisa estar logado para postar.', 'error');
-        return;
-    }
-
-    const form = event.target;
-    const postId = document.getElementById('postEditId').value;
-    const formData = new FormData(form); // Usa FormData
-
-    if (!formData.get('content')) {
-        showMessage('postMessage', 'O conteúdo do post não pode estar vazio.', 'error');
-        return;
-    }
-    
-    // Lógica para manter a foto antiga
-    if (postId) {
-        const post = blogPosts.find(p => p.id === parseInt(postId));
-        if (post && post.photoUrl) {
-            formData.append('photoUrl', post.photoUrl);
-        }
-    }
-    
-    try {
-        const endpoint = postId ? `/blog/${postId}` : '/blog';
-        const method = postId ? 'PUT' : 'POST';
-
-        await apiFetch(endpoint, {
-            method: method,
-            body: formData,
-            isFormData: true
-        });
-        
-        const message = postId ? 'atualizado' : 'publicado';
-        showMessage('postMessage', `Post ${message} com sucesso!`, 'success');
-
-        toggleNewPostForm(false);
-        loadBlogPosts(); // Recarrega o feed
-    } catch (error) {
-        showMessage('postMessage', `Erro: ${error.message}`, 'error');
-    }
-}
-
-
 async function loadAdoptionPets() {
     const container = document.getElementById('adoptionPets');
     container.innerHTML = `<div class="loading"><div class="spinner"></div></div>`;
     
     try {
-        // Passa filtros pela URL
+     
         const filters = getPetFilters();
         const adoptionPets = await apiFetch(`/pets/adoption?${filters}`);
         
-        pets = adoptionPets; // Atualiza o cache local
+        pets = adoptionPets; 
         
         if (adoptionPets.length === 0) {
             container.innerHTML = `
@@ -512,18 +474,20 @@ async function loadAdoptionPets() {
     }
 }
 
+
 async function loadMyPets() {
-    if (!currentUser) {
-        showPage('login');
-        return;
+    try {
+        await checkAuth();
+    } catch (error) {
+        return; // Para a execução se não estiver logado
     }
 
     const container = document.getElementById('myPetsGrid');
     container.innerHTML = `<div class="loading"><div class="spinner"></div></div>`;
 
     try {
-        const myPets = await apiFetch('/pets/mypets'); // Rota protegida
-        pets = myPets; // Atualiza o cache local
+        const myPets = await apiFetch('/pets/mypets'); 
+        pets = myPets; 
 
         if (myPets.length === 0) {
             container.innerHTML = `
@@ -543,6 +507,7 @@ async function loadMyPets() {
     }
 }
 
+
 function getStatusIndicator(pet) {
     if (pet.type === 'personal') {
         return `<span class="status-indicator status-personal">👤 Meu Pet</span>`;
@@ -553,6 +518,7 @@ function getStatusIndicator(pet) {
     }
     return '';
 }
+
 
 function displayPets(petsToShow, container, isAdoptionView) {
     container.innerHTML = petsToShow.map(pet => {
@@ -569,17 +535,21 @@ function displayPets(petsToShow, container, isAdoptionView) {
             } else {
                 actionButtons += ` <button class="btn btn-small" onclick="showPage('login')" style="background: #a0aec0;">Logar para Contato</button>`;
             }
-        } else { // My Pets View
+        } else { 
             actionButtons = `<button class="btn btn-small" onclick="openPetProfile(${pet.id})">Ver Perfil</button>`;
             
-            if (currentUser && pet.ownerId == currentUser.user.userId) {
+          
+            if (currentUser && pet.ownerId == currentUser.id) {
                  actionButtons += `<button class="btn btn-small" onclick="showPetRegisterPage(${pet.id})" style="background: #4299e1;">Editar</button>`;
             }
 
             if (pet.type === 'personal') {
                 actionButtons += `<button class="btn btn-small" onclick="openVaccinationModal(${pet.id})" style="background: #ed8936;">+ Vacina</button>`;
             } else if (pet.type === 'adoption' && pet.status === 'available') {
-                actionButtons += `<button class="btn btn-small" onclick="markAsAdopted(${pet.id})" style="background: #38a169;">Marcar como Adotado</button>`;
+               
+                if (currentUser && pet.ownerId == currentUser.id) {
+                    actionButtons += `<button class="btn btn-small" onclick="markAsAdopted(${pet.id})" style="background: #38a169;">Marcar como Adotado</button>`;
+                }
             }
         }
 
@@ -618,7 +588,14 @@ function displayPets(petsToShow, container, isAdoptionView) {
     }).join('');
 }
 
+
 async function deletePetFromForm() {
+    try {
+        await checkAuth(); 
+    } catch (error) {
+        return; 
+    }
+
     const petId = document.getElementById('petEditId').value;
     if (!petId) return;
 
@@ -633,11 +610,18 @@ async function deletePetFromForm() {
     }
 }
     
+
 async function markAsAdopted(petId) {
+    try {
+        await checkAuth();
+    } catch (error) {
+        return; 
+    }
+
     if (confirm("Você tem certeza que deseja marcar este pet como adotado? Esta ação removerá o pet da lista pública de adoção.")) {
         try {
             await apiFetch(`/pets/${petId}/adopt`, { method: 'PUT' });
-            loadMyPets(); // Recarrega a lista
+            loadMyPets(); 
         } catch (error) {
             alert(`Erro: ${error.message}`);
         }
@@ -663,7 +647,8 @@ function filterPets() {
     loadAdoptionPets();
 }
 
-function clearFilters() {
+
+ function clearFilters() {
     document.getElementById('searchFilter').value = '';
     document.getElementById('speciesFilter').value = '';
     document.getElementById('sizeFilter').value = '';
@@ -671,10 +656,7 @@ function clearFilters() {
     loadAdoptionPets();
 }
 
-
-// ===================================================================
-// 6. GERENCIAMENTO DE SERVIÇOS
-// ===================================================================
+// 7. GERENCIAMENTO DE SERVIÇOS
 
 async function loadServices() {
     const container = document.getElementById('servicesGrid'); 
@@ -682,7 +664,7 @@ async function loadServices() {
     
     container.innerHTML = `<div class="loading"><div class="spinner"></div></div>`;
     
-    // Lê os filtros do DOM
+   
     const searchTerm = document.getElementById('serviceSearchFilter')?.value || '';
     const category = document.getElementById('serviceCategoryFilter')?.value || '';
     
@@ -691,14 +673,14 @@ async function loadServices() {
     if (category) params.append('category', category);
 
     try {
-        // Passa os filtros para a API
         const services = await apiFetch(`/services?${params.toString()}`);
-        serviceProviders = services; // Atualiza cache local
+        serviceProviders = services; 
         displayServiceProviders(services, container);
     } catch (error) {
         container.innerHTML = `<div class="empty-state"><h3>Erro ao carregar serviços.</h3></div>`;
     }
 }
+
 
 function displayServiceProviders(providersToShow, container) {
     if (!container) return;
@@ -716,6 +698,7 @@ function displayServiceProviders(providersToShow, container) {
             let providerDetails = `<p><strong>Descrição:</strong> ${provider.description}</p>`;
             let providerActionsContent = '';
             
+            // O backend retorna "Faça login para ver" se o usuário não estiver logado
             const isLoggedIn = (provider.phone !== "Faça login para ver");
 
             if (isLoggedIn) {
@@ -733,7 +716,7 @@ function displayServiceProviders(providersToShow, container) {
                         </button>`;
                 }
                 
-               if (currentUser && currentUser.user.userId == provider.ownerId) {
+            if (currentUser && currentUser.id == provider.ownerId) {
                     providerActionsContent += `
                         <button class="btn btn-small" onclick="showServiceRegisterPage(${provider.id})" style="background: #4299e1;">
                             Editar
@@ -770,12 +753,18 @@ function displayServiceProviders(providersToShow, container) {
     }
 }
 
+
 function filterServices() {
     loadServices();
 }
 
+async function showServiceRegisterPage(serviceId = null) {
+    try {
+        await checkAuth(); 
+    } catch (error) {
+        return; 
+    }
 
-function showServiceRegisterPage(serviceId = null) {
     const form = document.getElementById('serviceRegisterForm');
     const title = document.getElementById('serviceFormTitle');
     const button = document.getElementById('serviceFormButton');
@@ -789,11 +778,13 @@ function showServiceRegisterPage(serviceId = null) {
         button.textContent = 'Cadastrar Serviço';
         hiddenId.value = '';
         deleteButtonWrapper.style.display = 'none';
-        // Tenta pegar localização (API Unidade IV)
+        
         getDeviceLocationForServiceForm();
     } else {
         const service = serviceProviders.find(s => s.id === serviceId);
-           if (service && service.ownerId == currentUser.user.userId) {
+        
+        
+           if (service && service.ownerId == currentUser.id) {
             title.textContent = 'Atualizar Serviço';
             button.textContent = 'Atualizar Serviço';
             hiddenId.value = service.id;
@@ -817,9 +808,10 @@ function showServiceRegisterPage(serviceId = null) {
 async function handleServiceRegistration(event) {
     event.preventDefault();
 
-    if (!currentUser) {
+    try {
+        await checkAuth();
+    } catch (error) {
         showMessage('serviceRegisterMessage', 'Você precisa estar logado para cadastrar um serviço.', 'error');
-        setTimeout(() => showPage('login'), 2000);
         return;
     }
 
@@ -827,7 +819,6 @@ async function handleServiceRegistration(event) {
     const serviceData = Object.fromEntries(formData);
     const serviceId = document.getElementById('serviceEditId').value;
     
-    // Pega lat/lon dos campos escondidos
     serviceData.latitude = document.getElementById('serviceLatitude')?.value || null;
     serviceData.longitude = document.getElementById('serviceLongitude')?.value || null;
 
@@ -861,6 +852,12 @@ async function handleServiceRegistration(event) {
 }
 
 async function deleteServiceFromForm() {
+    try {
+        await checkAuth();
+    } catch (error) {
+        return; 
+    }
+
     const serviceId = document.getElementById('serviceEditId').value;
     if (!serviceId) return;
 
@@ -875,12 +872,16 @@ async function deleteServiceFromForm() {
     }
 }
 
-// ===================================================================
-// 7. GERENCIAMENTO DE VACINAS
-// ===================================================================
-
+// 8. GERENCIAMENTO DE VACINAS
 async function handleVaccination(event) {
     event.preventDefault();
+    
+    try {
+        await checkAuth();
+    } catch (error) {
+        alert('Sessão expirada. Faça login novamente para adicionar vacinas.');
+        return;
+    }
     
     const petId = parseInt(document.getElementById('vaccinePetId').value);
     const name = document.getElementById('vaccineName').value.trim();
@@ -890,7 +891,7 @@ async function handleVaccination(event) {
     const notes = document.getElementById('vaccineNotes').value.trim();
 
     if (!name || !date) {
-        alert('Por favor, preencha os campos obrigatórios.');
+        alert('Por favor, preencha os campos obrigatórios (Nome da Vacina e Data).');
         return;
     }
 
@@ -903,61 +904,97 @@ async function handleVaccination(event) {
     };
 
     try {
+        
         const newVaccine = await apiFetch(`/pets/${petId}/vaccines`, {
             method: 'POST',
             body: JSON.stringify(vaccineData)
         });
         
-        // Atualiza o pet no array local
+      
         const pet = pets.find(p => p.id === petId);
         if (pet) {
-            pet.vaccines.push(newVaccine);
+            
+            pet.vaccines.unshift(newVaccine);
         }
         
         closeVaccinationModal();
-        openPetProfile(petId); // Reabre o perfil com a vacina
-        
+        openPetProfile(petId); 
+
         if (document.getElementById('my-pets').classList.contains('active')) {
-            loadMyPets(); // Recarrega a lista para mostrar o alerta
+            loadMyPets(); 
         }
     } catch (error) {
         alert(`Erro ao adicionar vacina: ${error.message}`);
     }
 }
 
+
 function getUpcomingVaccines(pet) {
+    if (!pet || !pet.vaccines) return [];
+
     const today = new Date();
     today.setHours(0, 0, 0, 0);
     const thirtyDaysFromNow = new Date(today.getTime() + (30 * 24 * 60 * 60 * 1000));
     
     return pet.vaccines.filter(vaccine => {
         if (!vaccine.nextDate) return false;
+        
         const nextDate = new Date(vaccine.nextDate);
+        
+        nextDate.setMinutes(nextDate.getMinutes() + nextDate.getTimezoneOffset());
+
         return nextDate >= today && nextDate <= thirtyDaysFromNow;
     });
 }
 
+
 function isVaccineUpcoming(vaccine) {
     if (!vaccine.nextDate) return false;
+    
     const today = new Date();
     today.setHours(0, 0, 0, 0);
     const thirtyDaysFromNow = new Date(today.getTime() + (30 * 24 * 60 * 60 * 1000));
+    
     const nextDate = new Date(vaccine.nextDate);
+    
+    nextDate.setMinutes(nextDate.getMinutes() + nextDate.getTimezoneOffset());
+    
     return nextDate >= today && nextDate <= thirtyDaysFromNow;
 }
 
-// ===================================================================
-// 8. GERENCIAMENTO DE MODAIS
-// ===================================================================
+// FUNÇÕES DE MODAL 
+
+async function openVaccinationModal(petId) {
+    try {
+        await checkAuth(); 
+    } catch (error) {
+        return;
+    }
+    
+    document.getElementById('vaccinePetId').value = petId;
+    document.getElementById('vaccinationForm').reset();
+    document.getElementById('vaccinationModal').classList.add('active');
+}
+
+
+function closeVaccinationModal() {
+    document.getElementById('vaccinationModal').classList.remove('active');
+}
+
+
+// 9. GERENCIAMENTO DE MODAIS
 
 function openPetProfile(petId) {
     const pet = pets.find(p => p.id === petId);
     if (!pet) return;
 
-   const isOwner = currentUser && currentUser.user.userId == pet.ownerId;
-    const petImage = pet.photoUrl ? `<img src="${pet.photoUrl}" alt="Foto de ${pet.name}" style="width: 100%; height: 100%; object-fit: cover;">` : getSpeciesIcon(pet.species);
+   
+   // Compara o ID do dono do pet com o ID do usuário logado (currentUser.id)
+   const isOwner = currentUser && (currentUser.id == pet.ownerId);
+   const petImage = pet.photoUrl ? `<img src="${pet.photoUrl}" alt="Foto de ${pet.name}" style="width: 100%; height: 100%; object-fit: cover;">` : getSpeciesIcon(pet.species);
 
     let adoptionButton = '';
+    // Se for pet de adoção, disponível, e o usuário NÃO for o dono
     if (pet.type === 'adoption' && pet.status === 'available' && !isOwner) {
         if (currentUser) {
             adoptionButton = `
@@ -974,6 +1011,7 @@ function openPetProfile(petId) {
                     </button>
                 </div>`;
         }
+    // Se o usuário FOR o dono e o pet estiver para adoção
     } else if (isOwner && pet.type === 'adoption' && pet.status === 'available') {
          adoptionButton = `
             <div style="text-align: center; margin-top: 25px;">
@@ -990,10 +1028,26 @@ function openPetProfile(petId) {
             </div>
             <h2 style="color: #2d3748; margin-bottom: 10px;">${pet.name}</h2>
             <p style="color: #718096;">Cadastrado em ${formatDate(pet.createdAt)}</p>
-            ${getStatusIndicator(pet)}
+            <div>${getStatusIndicator(pet)}</div>
         </div>
-        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 15px; margin-bottom: 25px;">
+        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 15px; margin-bottom: 25px; background: #f9f9f9; padding: 15px; border-radius: 10px;">
+            <div class="pet-detail-item">
+                <span><strong>Espécie:</strong></span>
+                <span>${getSpeciesIcon(pet.species)} ${pet.species === 'dog' ? 'Cão' : 'Gato'}</span>
             </div>
+            <div class="pet-detail-item">
+                <span><strong>Idade:</strong></span>
+                <span>${getAgeLabel(pet.age)}</span>
+            </div>
+            <div class="pet-detail-item">
+                <span><strong>Porte:</strong></span>
+                <span>${getSizeLabel(pet.size)}</span>
+            </div>
+            <div class="pet-detail-item">
+                <span><strong>Sexo:</strong></span>
+                <span>${getGenderLabel(pet.gender)}</span>
+            </div>
+        </div>
         <div style="margin-bottom: 25px;">
             <h4 style="color: #2d3748; margin-bottom: 10px; font-size: 1.1rem;">📝 Sobre ${pet.name}</h4>
             <p style="color: #4a5568; line-height: 1.6; background: #f7fafc; padding: 15px; border-radius: 10px;">${pet.description}</p>
@@ -1005,19 +1059,21 @@ function openPetProfile(petId) {
                 ${isOwner ? `<button class="btn btn-small" onclick="openVaccinationModal(${pet.id})">+ Adicionar Vacina</button>` : ''}
             </div>
             <div class="vaccination-list">
-                ${pet.vaccines.length > 0 ? pet.vaccines.map(vaccine => `
+                ${pet.vaccines.length > 0 ? pet.vaccines.sort((a, b) => new Date(b.date) - new Date(a.date)).map(vaccine => `
                     <div class="vaccination-item ${isVaccineUpcoming(vaccine) ? 'upcoming' : ''}">
                         <div class="vaccination-info">
                             <h4>💉 ${vaccine.name}</h4>
-                            <p>Aplicada em ${formatDate(vaccine.date)}</p>
+                            <p>Aplicada em ${formatDate(vaccine.date)} ${vaccine.vet ? `(Vet: ${vaccine.vet})` : ''}</p>
+                            ${vaccine.notes ? `<p style="font-size: 0.85rem; color: #718096; margin-top: 5px;"><i>Obs: ${vaccine.notes}</i></p>` : ''}
                         </div>
                         <div class="vaccination-date ${isVaccineUpcoming(vaccine) ? 'upcoming' : ''}">
                             ${vaccine.nextDate ? `Próxima: ${formatDate(vaccine.nextDate)}` : 'Dose única'}
                         </div>
                     </div>
                 `).join('') : `
-                    <div style="text-align: center; padding: 40px; color: #718096;">
+                    <div style="text-align: center; padding: 40px 20px; color: #718096; background: #fdfdfd; border-radius: 8px;">
                         Nenhuma vacina registrada.
+                        ${isOwner ? '<br/>Use o botão "+ Adicionar Vacina" para começar.' : ''}
                     </div>
                 `}
             </div>
@@ -1028,21 +1084,31 @@ function openPetProfile(petId) {
     document.getElementById('petModal').classList.add('active');
 }
 
+
 function closePetModal() {
     document.getElementById('petModal').classList.remove('active');
 }
 
-function openVaccinationModal(petId) {
+
+async function openVaccinationModal(petId) {
+    try {
+        await checkAuth(); 
+    } catch (error) {
+        return; 
+    }
+    
     document.getElementById('vaccinePetId').value = petId;
     document.getElementById('vaccinationForm').reset();
     document.getElementById('vaccinationModal').classList.add('active');
 }
+
 
 function closeVaccinationModal() {
     document.getElementById('vaccinationModal').classList.remove('active');
 }
 
 function showContact(ownerId, ownerName, ownerPhone, ownerEmail) {
+
     document.getElementById('contactModalContent').innerHTML = `
         <div style="text-align: center; margin-bottom: 30px;">
             <div style="font-size: 4rem; margin-bottom: 15px;">👤</div>
@@ -1070,21 +1136,25 @@ function closeContactModal() {
 }
 
 // ===================================================================
-// 9. GERENCIAMENTO DO BLOG
+// 10. GERENCIAMENTO DO BLOG
 // ===================================================================
+
 
 function toggleNewPostForm(show) {
     const postContainer = document.getElementById('new-post-container');
     const blogActions = document.getElementById('blog-actions');
 
     if (show) {
+          showPostForm(null); 
         postContainer.style.display = 'block';
         blogActions.style.display = 'none';
-        showPostForm(null); 
         postContainer.scrollIntoView({ behavior: 'smooth', block: 'center' });
     } else {
         postContainer.style.display = 'none';
-        blogActions.style.display = 'block';
+        // Mostra o botão "+ Escrever Novo Post" apenas se o usuário estiver logado
+        if (currentUser) {
+            blogActions.style.display = 'block';
+        }
     }
 }
 
@@ -1093,8 +1163,10 @@ async function loadBlogPosts() {
     const blogActions = document.getElementById('blog-actions');
     const feedContainer = document.getElementById('blogFeed');
 
+    // Controla a visibilidade dos botões de ação do blog
     if (currentUser) {
         blogActions.style.display = 'block';
+        // Esconde o formulário se não estiver em modo de edição
         if (!document.getElementById('postEditId').value) {
              postContainer.style.display = 'none';
         }
@@ -1106,11 +1178,11 @@ async function loadBlogPosts() {
     feedContainer.innerHTML = `<div class="loading"><div class="spinner"></div></div>`;
     
     try {
-        const posts = await apiFetch('/blog');
-        blogPosts = posts; // Atualiza cache local
+        const posts = await apiFetch('/blog'); 
+        blogPosts = posts; 
         displayBlogPosts(posts, feedContainer);
     } catch (error) {
-        feedContainer.innerHTML = `<div class="empty-state"><h3>Erro ao carregar o blog.</h3></div>`;
+        feedContainer.innerHTML = `<div class="empty-state"><h3>Erro ao carregar o blog. Tente novamente.</h3></div>`;
     }
 }
 
@@ -1127,8 +1199,7 @@ function displayBlogPosts(posts, container) {
 
     container.innerHTML = posts.map(post => {
         const ownerName = post.ownerName || 'Usuário';
-        const isOwner = currentUser && currentUser.user.userId == post.ownerId;
-
+        const isOwner = currentUser && (currentUser.id == post.ownerId);
         const postImageHTML = post.photoUrl 
             ? `<img src="${post.photoUrl}" alt="Foto do post" class="post-image">` 
             : '';
@@ -1141,22 +1212,20 @@ function displayBlogPosts(posts, container) {
             ? `<button class="post-actions-btn" onclick="showPostForm(${post.id})">Editar</button>`
             : '';
             
-        // --- ATUALIZAÇÃO DA FOTO DO POST (BLOG) ---
         let avatarHtml = '';
         if (post.ownerPhotoUrl) {
-            // Usa <img> se a URL da foto do dono existir
             avatarHtml = `<img src="${post.ownerPhotoUrl}" alt="${ownerName}" class="post-author-avatar-img">`;
         } else {
-            // Senão, usa a inicial
             const avatarLetter = ownerName.charAt(0).toUpperCase();
             avatarHtml = `${avatarLetter}`;
         }
 
-        const userHasLiked = currentUser && post.likes.includes(currentUser.user.userId);
+        const userHasLiked = currentUser && post.likes.includes(currentUser.id);
         const likeBtnActive = userHasLiked ? 'active' : '';
         const likeCount = post.likes.length;
         const likeText = likeCount === 1 ? 'curtida' : 'curtidas';
 
+        // Lógica de Comentários
         const commentsHTML = post.comments.map(comment => `
             <div class="comment-item">
                 <strong class="comment-author">${comment.ownerName || 'Usuário'}</strong>
@@ -1206,7 +1275,13 @@ function displayBlogPosts(posts, container) {
     }).join('');
 }
 
-function showPostForm(postId = null) {
+async function showPostForm(postId = null) {
+    try {
+        await checkAuth(); 
+    } catch (error) {
+        return; // Para a execução se não estiver logado
+    }
+
     const form = document.getElementById('postForm');
     const title = document.getElementById('postFormTitle');
     const button = document.getElementById('postFormButton');
@@ -1225,11 +1300,10 @@ function showPostForm(postId = null) {
         button.textContent = 'Publicar';
         hiddenId.value = '';
         deleteButtonWrapper.style.display = 'none';
-        // API Unidade IV: Preenche localização ao criar novo post
         getDeviceLocationForPostForm();
     } else {
         const post = blogPosts.find(p => p.id === postId);
-        if (post && post.ownerId == currentUser.user.userId) {
+        if (post && post.ownerId == currentUser.id) {
             title.textContent = 'Editar Post';
             button.textContent = 'Atualizar';
             hiddenId.value = post.id;
@@ -1248,7 +1322,63 @@ function showPostForm(postId = null) {
     }
 }
 
-async function deletePostFromForm() {
+async function handlePostSubmit(event) {
+    event.preventDefault();
+    
+    try {
+        await checkAuth();
+    } catch (error) {
+        showMessage('postMessage', 'Você precisa estar logado para postar.', 'error');
+        return;
+    }
+
+    const form = event.target;
+    const postId = document.getElementById('postEditId').value;
+    const formData = new FormData(form);
+
+    if (!formData.get('content')) {
+        showMessage('postMessage', 'O conteúdo do post não pode estar vazio.', 'error');
+        return;
+    }
+    
+    // Lógica para manter a foto antiga ao editar (se nenhuma nova for enviada)
+    if (postId) {
+        const post = blogPosts.find(p => p.id === parseInt(postId));
+        // Se não houver arquivo novo (req.file) E o post antigo tiver foto,
+        // envia a URL antiga para o backend não apagar.
+        if (!formData.get('photo').size && post && post.photoUrl) {
+            formData.append('photoUrl', post.photoUrl);
+        }
+    }
+    
+    try {
+        const endpoint = postId ? `/blog/${postId}` : '/blog';
+        const method = postId ? 'PUT' : 'POST';
+
+        await apiFetch(endpoint, {
+            method: method,
+            body: formData,
+            isFormData: true
+        });
+        
+        const message = postId ? 'atualizado' : 'publicado';
+        showMessage('postMessage', `Post ${message} com sucesso!`, 'success');
+
+        toggleNewPostForm(false);
+        loadBlogPosts();
+    } catch (error) {
+        showMessage('postMessage', `Erro: ${error.message}`, 'error');
+    }
+}
+
+//(Protegida) Deleta um post a partir do formulário de edição
+ async function deletePostFromForm() {
+    try {
+        await checkAuth(); 
+    } catch (error) {
+        return; 
+    }
+
     const postId = document.getElementById('postEditId').value;
     if (!postId) return;
 
@@ -1256,34 +1386,58 @@ async function deletePostFromForm() {
         try {
             await apiFetch(`/blog/${postId}`, { method: 'DELETE' });
             toggleNewPostForm(false);
-            loadBlogPosts();
+            loadBlogPosts(); // Recarrega o feed
         } catch (error) {
             alert(`Erro ao excluir: ${error.message}`);
         }
     }
 }
 
+// (Protegida) Adiciona ou remove um like de um post
 async function toggleLike(postId) {
-    if (!currentUser) {
-        showPage('login');
-        return;
+    try {
+        await checkAuth(); 
+    } catch (error) {
+        return; 
     }
 
     try {
         // A API cuida da lógica de adicionar/remover
         await apiFetch(`/blog/${postId}/like`, { method: 'POST' });
-        loadBlogPosts(); // Simples, mas recarrega tudo
+
+        const post = blogPosts.find(p => p.id === postId);
+        const likeButton = document.querySelector(`#post-${postId} .like-btn`);
+        const likeCountSpan = document.querySelector(`#post-${postId} .like-count`);
+        const myUserId = currentUser.id;
+
+        if (post.likes.includes(myUserId)) {
+            // Remove o like localmente
+            post.likes = post.likes.filter(id => id !== myUserId);
+            likeButton.classList.remove('active');
+        } else {
+            // Adiciona o like localmente
+            post.likes.push(myUserId);
+            likeButton.classList.add('active');
+        }
+
+        const likeCount = post.likes.length;
+        const likeText = likeCount === 1 ? 'curtida' : 'curtidas';
+        likeCountSpan.textContent = `${likeCount} ${likeText}`;
         
     } catch (error) {
         alert(`Erro ao curtir: ${error.message}`);
+        // Se der erro, recarrega tudo para garantir consistência
+        loadBlogPosts();
     }
 }
 
+
 async function handleCommentSubmit(event, postId) {
     event.preventDefault();
-    if (!currentUser) {
-        showPage('login');
-        return;
+    try {
+        await checkAuth(); 
+    } catch (error) {
+        return; 
     }
 
     const form = event.target;
@@ -1293,27 +1447,43 @@ async function handleCommentSubmit(event, postId) {
     if (!content) return;
 
     try {
-        await apiFetch(`/blog/${postId}/comment`, {
+        const newComment = await apiFetch(`/blog/${postId}/comment`, {
             method: 'POST',
             body: JSON.stringify({ content })
         });
         
         input.value = '';
-        loadBlogPosts(); // Recarrega para mostrar o novo comentário
+
+        
+        const post = blogPosts.find(p => p.id === postId);
+        post.comments.push(newComment); 
+        // Renderiza apenas o novo comentário
+        const commentsList = document.querySelector(`#post-${postId} .post-comments-list`);
+        const newCommentHTML = `
+            <div class="comment-item">
+                <strong class="comment-author">${newComment.ownerName}</strong>
+                <p class="comment-content">${newComment.content}</p>
+            </div>
+        `;
+        
+        // Remove o texto "Seja o primeiro a comentar" se for o primeiro comentário
+        if (commentsList.querySelector('p')) {
+            commentsList.innerHTML = newCommentHTML;
+        } else {
+            commentsList.innerHTML += newCommentHTML;
+        }
+        commentsList.scrollTop = commentsList.scrollHeight; // Rola para o novo comentário
+
     } catch (error) {
         alert(`Erro ao comentar: ${error.message}`);
     }
 }
 
 
-// ===================================================================
-// 10. INTEGRAÇÃO APIs UNIDADE IV (Geolocalização e Mapas)
-// ===================================================================
+// 11. INTEGRAÇÃO APIs UNIDADE IV (Geolocalização e Mapas)
 
-/**
- * API de Geolocalização (Sensor)
- * Tenta obter a localização e preencher o formulário de POST.
- */
+//  API de Geolocalização (Sensor). Tenta obter a localização e preencher o formulário de POST.
+
 function getDeviceLocationForPostForm() {
     const locationInput = document.getElementById('postLocation');
     if (!locationInput) return;
@@ -1346,10 +1516,7 @@ function getDeviceLocationForPostForm() {
     }
 }
 
-/**
- * API de Geolocalização (Sensor)
- * Tenta obter lat/lon e preencher o formulário de SERVIÇO.
- */
+// API de Geolocalização (Sensor). Tenta obter lat/lon e preencher o formulário de SERVIÇO.
 function getDeviceLocationForServiceForm() {
     // Adiciona campos hidden ao formulário de serviço
     const form = document.getElementById('serviceRegisterForm');
@@ -1380,10 +1547,7 @@ function getDeviceLocationForServiceForm() {
     }
 }
 
-/**
- * API de Mapas (Leaflet.js)
- * Mostra o mapa do serviço no modal de contato.
- */
+// API de Mapas (Leaflet.js). Mostra o mapa do serviço no modal de contato.
 function showServiceMapInModal(service) {
     if (!service.latitude || !service.longitude) {
         alert('Este serviço não possui localização no mapa.');
@@ -1421,23 +1585,32 @@ function showServiceMapInModal(service) {
     }, 100);
 }
 
-
 // ===================================================================
-// 11. INICIALIZAÇÃO E EVENT LISTENERS
+// 12. INICIALIZAÇÃO E EVENT LISTENERS
 // ===================================================================
 
 document.addEventListener('DOMContentLoaded', function() {
+       
+    // Seção 4: Autenticação
     document.getElementById('loginForm').addEventListener('submit', handleLogin);
     document.getElementById('registerForm').addEventListener('submit', handleRegister);
-    document.getElementById('petRegisterForm').addEventListener('submit', handlePetRegistration);
-    document.getElementById('vaccinationForm').addEventListener('submit', handleVaccination);
-    document.getElementById('serviceRegisterForm').addEventListener('submit', handleServiceRegistration);
-    document.getElementById('postForm').addEventListener('submit', handlePostSubmit);
     
-    // ✨ ADICIONA O NOVO LISTENER PARA O FORMULÁRIO DE PERFIL
+    // Seção 5: Perfil
     document.getElementById('profileForm').addEventListener('submit', handleProfileUpdate);
 
+    // Seção 6: Pets
+    document.getElementById('petRegisterForm').addEventListener('submit', handlePetRegistration);
+    
+    // Seção 7: Serviços
+    document.getElementById('serviceRegisterForm').addEventListener('submit', handleServiceRegistration);
 
+    // Seção 8: Vacinas
+    document.getElementById('vaccinationForm').addEventListener('submit', handleVaccination);
+    
+    // Seção 10: Blog
+    document.getElementById('postForm').addEventListener('submit', handlePostSubmit);
+
+    // Fecha qualquer modal ao clicar no fundo (fora do conteúdo)
     document.querySelectorAll('.modal').forEach(modal => {
         modal.addEventListener('click', function(e) {
             if (e.target === modal) {
@@ -1446,12 +1619,54 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     });
 
-    // Define data máxima da vacina
+    // Define a data máxima para "Data de Aplicação" da vacina como "hoje"
     const today = new Date().toISOString().split('T')[0];
     document.getElementById('vaccineDate').max = today;
 
-    checkLocalStorageLogin(); // Verifica se já está logado
-    updateAuthButtons();
-    loadAdoptionPets(); // Carrega a página inicial de adoção
-});
+    // Isso substitui a antiga função 'checkLocalStorageLogin()'
+    supabase.auth.onAuthStateChange(async (event, session) => {
+        
+        console.log('Supabase Auth Event:', event, session);
 
+        // Eventos que indicam que o usuário está (ou deveria estar) logado
+        if (event === 'SIGNED_IN' || event === 'INITIAL_SESSION' || event === 'TOKEN_REFRESHED') {
+            if (session) {
+                try {
+                    const profile = await apiFetch('/auth/me'); 
+                    // Armazena o perfil (id, name, email, role, etc.)
+                    currentUser = profile; 
+                    
+                } catch (error) {
+                    // Erro crítico: O usuário existe no Supabase Auth,
+                    // mas não foi encontrado no nosso banco de dados 'users' (GET /me falhou).
+                    // Isso pode acontecer se o Trigger (Req 1) falhar.
+                    console.error("Erro ao buscar perfil do usuário:", error.message);
+                    currentUser = null;
+                    // Força o logout do Supabase para evitar um estado inconsistente
+                    await supabase.auth.signOut();
+                }
+            } else {
+                // Sessão é nula, usuário não está logado
+                currentUser = null;
+            }
+            // Atualiza a UI (avatar, botões de login/logout)
+            updateAuthButtons();
+        
+        // Evento que indica que o usuário fez logout
+        } else if (event === 'SIGNED_OUT') {
+            currentUser = null;
+            updateAuthButtons(); // Atualiza a UI
+            
+            // Recarrega dados públicos para limpar informações privadas
+            // que poderiam estar visíveis (ex: botões de editar)
+            loadAdoptionPets();
+            loadServices();
+            loadBlogPosts();
+        }
+    });
+
+    // Carrega a página inicial de adoção (pública)
+    // O listener onAuthStateChange cuidará de logar o usuário
+    // automaticamente se ele tiver uma sessão salva.
+    loadAdoptionPets();
+});

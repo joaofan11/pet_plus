@@ -2,7 +2,8 @@
 require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
-const path = require('path'); // <- IMPORTE O 'path'
+const path = require('path');
+const errorHandler = require('./middleware/errorHandler'); // <-- IMPORTAR
 
 const app = express();
 const port = process.env.PORT || 3001;
@@ -16,6 +17,7 @@ app.use(cors(corsOptions));
 app.use(express.json()); // Parser para JSON
 
 // Isso faz com que a URL http://localhost:3001/uploads/nome-da-imagem.png funcione
+// Se estiver usando Supabase para *todos* os uploads, esta linha não é estritamente necessária.
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
 // Rotas da API
@@ -29,9 +31,13 @@ app.get('/api', (req, res) => {
   res.send('API PetPlus V1.0 funcionando!');
 });
 
+// ******************************************************
+// ** MIDDLEWARE GLOBAL DE TRATAMENTO DE ERROS **
+// ** Deve ser o ÚLTIMO middleware a ser adicionado **
+app.use(errorHandler);
+// ******************************************************
+
 // Iniciar servidor
 app.listen(port, () => {
-  console.log(`=====================Servidor rodando em http://localhost:${port}========================== Bem Vindo Ao Petplus
-    `);
-
+  console.log(`=====================Servidor rodando em http://localhost:${port}========================== Bem Vindo Ao Petplus`);
 });
