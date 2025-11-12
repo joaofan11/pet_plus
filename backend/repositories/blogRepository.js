@@ -2,23 +2,54 @@
 const db = require('../db');
 
 /**
- * Busca todos os posts com informações do autor.
- * Note a vírgula corrigida na query original.
+ * Busca todos os posts com infos do autor, contagem de likes/comentários e paginação.
  */
-const findAllPosts = async () => {
-  const query = `
+const findAllPosts = async (filters = {}) => {
+  // 1. Configurações de paginação
+  const page = parseInt(filters.page, 10) || 1;
+  const limit = parseInt(filters.limit, 10) || 10;
+  const offset = (page - 1) * limit;
+
+  // 2. Query de base
+  const baseQuery = `
+      FROM posts p 
+      JOIN users u ON p.owner_id = u.id
+  `;
+  const params = [];
+
+  // 3. Query de Contagem (Total de registros)
+  const countQuery = `SELECT COUNT(p.id) AS total ${baseQuery}`;
+  const { rows: countRows } = await db.query(countQuery, params);
+  const total = parseInt(countRows[0].total, 10);
+
+  // 4. Query de Dados (com paginação e correção N+1)
+  const dataParams = [...params, limit, offset];
+  
+  const dataQuery = `
       SELECT p.id, p.content, p.location, 
              p.owner_id AS "ownerId", 
              p.photo_url AS "photoUrl", 
              p.created_at AS "createdAt", 
              u.name AS "ownerName",
-             u.photo_url AS "ownerPhotoUrl"
-      FROM posts p 
-      JOIN users u ON p.owner_id = u.id 
+             u.photo_url AS "ownerPhotoUrl",
+             
+             (SELECT COUNT(*) FROM comments c WHERE c.post_id = p.id) AS "commentCount",
+             (SELECT COUNT(*) FROM likes l WHERE l.post_id = p.id) AS "likeCount"
+             
+      ${baseQuery}
       ORDER BY p.created_at DESC
+      LIMIT $${dataParams.length - 1} OFFSET $${dataParams.length}
   `;
-  const { rows } = await db.query(query);
-  return rows;
+  
+  const { rows } = await db.query(dataQuery, dataParams);
+
+  // 5. Retorna o objeto paginado
+  return {
+      data: rows,
+      total: total,
+      page: page,
+      totalPages: Math.ceil(total / limit)
+  };
 };
 
 /**

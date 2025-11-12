@@ -2,29 +2,55 @@
 const db = require('../db');
 
 /**
- * Busca todos os serviços com base em filtros, incluindo dados do dono.
+ * Busca todos os serviços com base em filtros, incluindo dados do dono e paginação.
  */
 const findAllServices = async (filters = {}) => {
   const { category, search } = filters;
   
-  let query = `
-      SELECT 
-          s.id, s.category, s.name, s.professional, s.phone, s.address, s.description, s.latitude, s.longitude,
-          s.owner_id AS "ownerId", 
-          s.created_at AS "createdAt", 
-          u.name AS "ownerName" 
+  // 1. Configurações de paginação
+  const page = parseInt(filters.page, 10) || 1;
+  const limit = parseInt(filters.limit, 10) || 10;
+  const offset = (page - 1) * limit;
+  
+  // 2. Query de base e parâmetros de filtro
+  let baseQuery = `
       FROM services s 
       JOIN users u ON s.owner_id = u.id 
       WHERE 1=1
   `;
   const params = [];
 
-  if (category) { params.push(category); query += ` AND s.category = $${params.length}`; }
-  if (search) { params.push(`%${search}%`); query += ` AND (s.name ILIKE $${params.length} OR s.professional ILIKE $${params.length} OR s.address ILIKE $${params.length})`; }
-  query += " ORDER BY s.created_at DESC";
+  if (category) { params.push(category); baseQuery += ` AND s.category = $${params.length}`; }
+  if (search) { params.push(`%${search}%`); baseQuery += ` AND (s.name ILIKE $${params.length} OR s.professional ILIKE $${params.length} OR s.address ILIKE $${params.length})`; }
+  
+  // 3. Query de Contagem (Total de registros)
+  const countQuery = `SELECT COUNT(s.id) AS total ${baseQuery}`;
+  const { rows: countRows } = await db.query(countQuery, params);
+  const total = parseInt(countRows[0].total, 10);
 
-  const { rows } = await db.query(query, params);
-  return rows;
+  // 4. Query de Dados (com paginação)
+  const dataParams = [...params, limit, offset];
+  
+  const dataQuery = `
+      SELECT 
+          s.id, s.category, s.name, s.professional, s.phone, s.address, s.description, s.latitude, s.longitude,
+          s.owner_id AS "ownerId", 
+          s.created_at AS "createdAt", 
+          u.name AS "ownerName" 
+      ${baseQuery}
+      ORDER BY s.created_at DESC
+      LIMIT $${dataParams.length - 1} OFFSET $${dataParams.length}
+  `;
+
+  const { rows } = await db.query(dataQuery, dataParams);
+
+  // 5. Retorna o objeto paginado
+  return {
+      data: rows,
+      total: total,
+      page: page,
+      totalPages: Math.ceil(total / limit)
+  };
 };
 
 /**

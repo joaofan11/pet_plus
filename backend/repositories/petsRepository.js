@@ -2,12 +2,39 @@
 const db = require('../db');
 
 /**
- * Busca pets para adoção com base em filtros.
+ * Busca pets para adoção com base em filtros e paginação.
  */
 const findAdoptionPets = async (filters = {}) => {
   const { species, size, age, search } = filters;
+  
+  // 1. Configurações de paginação
+  const page = parseInt(filters.page, 10) || 1;
+  const limit = parseInt(filters.limit, 10) || 10;
+  const offset = (page - 1) * limit;
 
-  let query = `
+  // 2. Query de base e parâmetros de filtro
+  let baseQuery = `
+      FROM pets p 
+      JOIN users u ON p.owner_id = u.id 
+      WHERE p.type = 'adoption' AND p.status = 'available'
+  `;
+  
+  const params = [];
+  if (species) { params.push(species); baseQuery += ` AND p.species = $${params.length}`; }
+  if (size) { params.push(size); baseQuery += ` AND p.size = $${params.length}`; }
+  if (age) { params.push(age); baseQuery += ` AND p.age = $${params.length}`; }
+  if (search) { params.push(`%${search}%`); baseQuery += ` AND (p.name ILIKE $${params.length} OR p.breed ILIKE $${params.length})`; }
+  
+  // 3. Query de Contagem (Total de registros)
+  const countQuery = `SELECT COUNT(p.id) AS total ${baseQuery}`;
+  const { rows: countRows } = await db.query(countQuery, params);
+  const total = parseInt(countRows[0].total, 10);
+
+  // 4. Query de Dados (com paginação)
+  // Adiciona limit e offset aos parâmetros (apenas para esta query)
+  const dataParams = [...params, limit, offset];
+  
+  const dataQuery = `
       SELECT 
           p.id, p.name, p.species, p.breed, p.age, p.size, p.gender, p.type, p.status, p.description,
           p.owner_id AS "ownerId", 
@@ -16,20 +43,20 @@ const findAdoptionPets = async (filters = {}) => {
           u.name AS "ownerName", 
           u.phone AS "ownerPhone", 
           u.email AS "ownerEmail" 
-      FROM pets p 
-      JOIN users u ON p.owner_id = u.id 
-      WHERE p.type = 'adoption' AND p.status = 'available'
+      ${baseQuery}
+      ORDER BY p.created_at DESC
+      LIMIT $${dataParams.length - 1} OFFSET $${dataParams.length}
   `;
   
-  const params = [];
-  if (species) { params.push(species); query += ` AND p.species = $${params.length}`; }
-  if (size) { params.push(size); query += ` AND p.size = $${params.length}`; }
-  if (age) { params.push(age); query += ` AND p.age = $${params.length}`; }
-  if (search) { params.push(`%${search}%`); query += ` AND (p.name ILIKE $${params.length} OR p.breed ILIKE $${params.length})`; }
-  query += " ORDER BY p.created_at DESC";
+  const { rows } = await db.query(dataQuery, dataParams);
   
-  const { rows } = await db.query(query, params);
-  return rows;
+  // 5. Retorna o objeto paginado
+  return {
+      data: rows,
+      total: total,
+      page: page,
+      totalPages: Math.ceil(total / limit)
+  };
 };
 
 /**
