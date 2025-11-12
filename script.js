@@ -11,10 +11,15 @@ if (SUPABASE_URL === 'URL_DO_SEU_PROJETO_SUPABASE' || SUPABASE_ANON_KEY === 'CHA
 
 const supabase = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
-let currentUser = null; 
-let pets = [];
-let serviceProviders = [];
-let blogPosts = [];
+// BLOCO 6 (Tarefas 1 e 2): Gerenciamento de Estado Centralizado
+// Variáveis globais soltas foram removidas e agrupadas em um objeto AppState.
+const AppState = {
+    currentUser: null,
+    adoptionPets: [],
+    myPets: [],
+    serviceProviders: [],
+    blogPosts: []
+};
 
 // 2. FUNÇÕES AUXILIARES DE API (Refatorada)
 
@@ -48,10 +53,11 @@ async function apiFetch(endpoint, options = {}) {
         if (!response.ok) {
             const errorData = await response.json();
             console.error('Erro na API:', errorData);
+            // BLOCO 6 (Tarefa 6): Padroniza a forma como erros são lançados
             throw new Error(errorData.message || `HTTP error! status: ${response.status}`);
         }
         
-        if (response.status === 204) {
+        if (response.status === 204) { // No Content
             return null;
         }
 
@@ -67,18 +73,80 @@ async function apiFetch(endpoint, options = {}) {
 function showMessage(elementId, message, type = 'success') {
     const messageEl = document.getElementById(elementId);
     if (!messageEl) return;
+    // Usa textContent para prevenir XSS
     messageEl.textContent = message;
     messageEl.className = `message ${type} active`;
     setTimeout(() => {
         messageEl.classList.remove('active');
     }, 5000);
 }
-function formatDate(date) { /* ... (código inalterado) ... */ }
-function formatDateTime(date) { /* ... (código inalterado) ... */ }
-function getSpeciesIcon(species) { /* ... (código inalterado) ... */ }
-function getAgeLabel(age) { /* ... (código inalterado) ... */ }
-function getSizeLabel(size) { /* ... (código inalterado) ... */ }
-function getGenderLabel(gender) { /* ... (código inalterado) ... */ }
+
+// BLOCO 6 (Tarefa 5): Feedback visual para botões
+function setButtonLoading(button, isLoading, originalText = '') {
+    if (isLoading) {
+        button.disabled = true;
+        // Adiciona spinner, mantendo o estilo do CSS
+        button.innerHTML = `<div class="spinner" style="width: 20px; height: 20px; border-width: 2px; margin: 0 auto; border-top-color: white; border-left-color: white; border-right-color: white;"></div>`;
+    } else {
+        button.disabled = false;
+        button.innerHTML = originalText;
+    }
+}
+
+// BLOCO 6 (Tarefa 7): Funções de higienização de HTML para prevenir XSS
+function escapeHTML(str) {
+    if (str === null || str === undefined) return '';
+    return String(str)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#039;');
+}
+
+function escapeAttr(str) {
+    if (str === null || str === undefined) return '';
+    // Escapa apenas o caractere que usamos para delimitar no onclick ('')
+    return String(str).replace(/'/g, '&#39;');
+}
+
+// BLOCO 6 (Tarefa 3): Função Debounce
+function debounce(func, delay = 400) {
+    let timer;
+    return function(...args) {
+        clearTimeout(timer);
+        timer = setTimeout(() => {
+            func.apply(this, args);
+        }, delay);
+    };
+}
+
+
+// Funções utilitárias de formatação (inalteradas)
+function formatDate(dateString) {
+    const date = new Date(dateString);
+    date.setMinutes(date.getMinutes() + date.getTimezoneOffset()); // Corrige fuso
+    return date.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric' });
+}
+function formatDateTime(dateString) {
+    const date = new Date(dateString);
+    date.setMinutes(date.getMinutes() + date.getTimezoneOffset()); // Corrige fuso
+    return date.toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+}
+function getSpeciesIcon(species) { return species === 'dog' ? '🐕' : '🐈'; }
+function getAgeLabel(age) {
+    const labels = { puppy: 'Filhote', young: 'Jovem', adult: 'Adulto', senior: 'Idoso' };
+    return labels[age] || age;
+}
+function getSizeLabel(size) {
+    const labels = { small: 'Pequeno', medium: 'Médio', large: 'Grande' };
+    return labels[size] || size;
+}
+function getGenderLabel(gender) {
+    const labels = { male: 'Macho', female: 'Fêmea' };
+    return labels[gender] || gender;
+}
+
 
 // 4. NAVEGAÇÃO E AUTENTICAÇÃO 
 
@@ -118,22 +186,26 @@ function updateAuthButtons() {
     const myPetsBtn = document.getElementById('myPetsBtn');
     const userInfo = document.getElementById('userInfo');
 
-    if (currentUser) { 
+    // BLOCO 6 (Tarefa 1): Lê do AppState
+    if (AppState.currentUser) { 
         loginBtn.style.display = 'none';
         logoutBtn.style.display = 'inline-block';
         myPetsBtn.style.display = 'inline-block';
         
-        const user = currentUser; 
+        const user = AppState.currentUser; 
         let avatarHtml = '';
 
         if (user.photoUrl) {
-            avatarHtml = `<img src="${user.photoUrl}" alt="${user.name}" class="nav-avatar">`;
+            // BLOCO 6 (Tarefa 4): Lazy loading
+            // BLOCO 6 (Tarefa 7): Escapando atributos
+            avatarHtml = `<img loading="lazy" src="${escapeAttr(user.photoUrl)}" alt="${escapeAttr(user.name)}" class="nav-avatar">`;
         } else {
-            const letter = user.name ? user.name.charAt(0).toUpperCase() : '👤';
+            const letter = user.name ? escapeHTML(user.name).charAt(0).toUpperCase() : '👤';
             avatarHtml = `<div class="nav-avatar-default">${letter}</div>`;
         }
         
-        userInfo.innerHTML = `${avatarHtml} <span>Olá, ${user.name}</span>`;
+        // BLOCO 6 (Tarefa 7): Higieniza o nome do usuário
+        userInfo.innerHTML = `${avatarHtml} <span>Olá, ${escapeHTML(user.name)}</span>`;
         userInfo.classList.add('active');
         userInfo.onclick = showProfileEditPage;
         userInfo.style.cursor = 'pointer';
@@ -143,6 +215,7 @@ function updateAuthButtons() {
         logoutBtn.style.display = 'none';
         myPetsBtn.style.display = 'none';
         
+        // Reseta para o padrão
         userInfo.innerHTML = `👋 Olá, <span id="userName"></span>`;
         userInfo.classList.remove('active');
         userInfo.onclick = null;
@@ -160,6 +233,10 @@ async function handleLogin(event) {
         return;
     }
 
+    // BLOCO 6 (Tarefa 5): Feedback no botão
+    const loginButton = event.target.querySelector('button[type="submit"]');
+    setButtonLoading(loginButton, true);
+
     try {
         const { error } = await supabase.auth.signInWithPassword({
             email,
@@ -172,15 +249,19 @@ async function handleLogin(event) {
             } else {
                 showMessage('loginMessage', 'Email ou senha incorretos.', 'error');
             }
+            setButtonLoading(loginButton, false, 'Entrar'); // Reseta o botão no erro
             return;
         }
         // Mensagem de Sucesso!
         showMessage('loginMessage', 'Login realizado com sucesso!', 'success');     
         setTimeout(() => showPage('landing'), 1500);
         document.getElementById('loginForm').reset();
+        // O botão será resetado pela navegação, mas é boa prática
+        setButtonLoading(loginButton, false, 'Entrar');
 
     } catch (error) {
         showMessage('loginMessage', error.message, 'error');
+        setButtonLoading(loginButton, false, 'Entrar'); // Reseta o botão no erro
     }
 }
 
@@ -209,6 +290,10 @@ async function handleRegister(event) {
         return;
     }
 
+    // BLOCO 6 (Tarefa 5): Feedback no botão
+    const registerButton = event.target.querySelector('button[type="submit"]');
+    setButtonLoading(registerButton, true);
+
     try {
         const { data, error } = await supabase.auth.signUp({
             email,
@@ -226,10 +311,12 @@ async function handleRegister(event) {
         // Mensagem de verificação de e-mail
         showMessage('registerMessage', 'Cadastro realizado! Verifique seu e-mail para ativar sua conta.', 'success');
         document.getElementById('registerForm').reset();
+        setButtonLoading(registerButton, false, 'Criar Conta');
         setTimeout(() => showPage('login'), 2000);
 
     } catch (error) {
         showMessage('registerMessage', error.message, 'error');
+        setButtonLoading(registerButton, false, 'Criar Conta'); // Reseta no erro
     }
 }
 
@@ -239,7 +326,8 @@ async function logout() {
     
     if (error) {
         console.error('Erro no logout:', error);
-        alert('Erro ao sair. Tente novamente.');
+        // Tenta mostrar a mensagem na página de login, para onde o usuário provavelmente irá
+        showMessage('loginMessage', 'Erro ao sair. Tente novamente.', 'error');
     }
     
      showPage('landing');
@@ -288,12 +376,13 @@ async function checkAuth() {
 
 // 5. EDIÇÃO DE PERFIL
 function showProfileEditPage() {
-    if (!currentUser) {
+    // BLOCO 6 (Tarefa 1): Lê do AppState
+    if (!AppState.currentUser) {
         showPage('login');
         return;
     }
     
-    const user = currentUser;
+    const user = AppState.currentUser;
     document.getElementById('profileName').value = user.name || '';
     document.getElementById('profileEmail').value = user.email || '';
     document.getElementById('profilePhone').value = user.phone || '';
@@ -313,6 +402,10 @@ function showProfileEditPage() {
         return;
     }
 
+    // BLOCO 6 (Tarefa 5): Feedback no botão
+    const button = event.target.querySelector('button[type="submit"]');
+    setButtonLoading(button, true);
+
     const form = document.getElementById('profileForm');
     const formData = new FormData(form);
 
@@ -326,12 +419,15 @@ function showProfileEditPage() {
 
         showMessage('profileMessage', data.message, 'success');
         
-        currentUser = data.user;
-        updateAuthButtons();
+        // BLOCO 6 (Tarefa 1): Atualiza o AppState
+        AppState.currentUser = data.user;
+        updateAuthButtons(); // Re-renderiza a navbar com novos dados
+        setButtonLoading(button, false, 'Salvar Alterações');
         setTimeout(() => showPage('landing'), 2000);
 
     } catch (error) {
         showMessage('profileMessage', error.message, 'error');
+        setButtonLoading(button, false, 'Salvar Alterações'); // Reseta no erro
     }
 }
 
@@ -360,11 +456,11 @@ async function showPetRegisterPage(petId = null) {
         hiddenId.value = '';
         deleteButtonWrapper.style.display = 'none';
     } else {
-       
-        const pet = pets.find(p => p.id === petId);
+        // BLOCO 6 (Tarefa 1): Busca o pet em *ambos* os arrays de estado
+        const pet = AppState.myPets.find(p => p.id === petId) || AppState.adoptionPets.find(p => p.id === petId);
         
-        
-        if (pet && pet.ownerId == currentUser.id) { 
+        // BLOCO 6 (Tarefa 1): Compara com o currentUser no AppState
+        if (pet && pet.ownerId == AppState.currentUser.id) { 
             title.textContent = 'Atualizar Pet';
             button.textContent = 'Atualizar Pet';
             hiddenId.value = pet.id;
@@ -379,7 +475,8 @@ async function showPetRegisterPage(petId = null) {
             document.getElementById('petGender').value = pet.gender;
             document.getElementById('petDescription').value = pet.description;
         } else {
-            alert("Pet não encontrado ou você não tem permissão para editá-lo.");
+            // BLOCO 6 (Tarefa 6): Substitui alert
+            showMessage('myPetsMessage', "Pet não encontrado ou você não tem permissão para editá-lo.", 'error');
             return;
         }
     }
@@ -408,9 +505,15 @@ async function handlePetRegistration(event) {
         return;
     }
 
+    // BLOCO 6 (Tarefa 5): Feedback no botão
+    const button = form.querySelector('button[type="submit"]');
+    const buttonText = petId ? 'Atualizar Pet' : 'Cadastrar Pet';
+    setButtonLoading(button, true, buttonText);
+
    
     if (petId) {
-        const pet = pets.find(p => p.id === parseInt(petId));
+        // BLOCO 6 (Tarefa 1): Busca o pet no AppState
+        const pet = AppState.myPets.find(p => p.id === parseInt(petId)) || AppState.adoptionPets.find(p => p.id === parseInt(petId));
         if (pet && pet.photoUrl) {
             formData.append('photoUrl', pet.photoUrl); 
         }
@@ -429,27 +532,30 @@ async function handlePetRegistration(event) {
         });
 
         const message = petId ? 'atualizado' : 'cadastrado';
-        showMessage('petRegisterMessage', `${responseData.name} foi ${message} com sucesso!`, 'success');
+        showMessage('petRegisterMessage', `${escapeHTML(responseData.name)} foi ${message} com sucesso!`, 'success');
         
         form.reset();
         document.getElementById('petEditId').value = '';
+        setButtonLoading(button, false, buttonText);
         
       
         setTimeout(() => {
             if (responseData.type === 'adoption') {
-                showPage('adoption');
+                showPage('adoption'); // Irá recarregar os pets
             } else {
-                showPage('my-pets');
+                showPage('my-pets'); // Irá recarregar os pets
             }
         }, 1500);
 
     } catch (error) {
         showMessage('petRegisterMessage', `Erro: ${error.message}`, 'error');
+        setButtonLoading(button, false, buttonText); // Reseta no erro
     }
 }
 
 async function loadAdoptionPets() {
     const container = document.getElementById('adoptionPets');
+    // BLOCO 6 (Tarefa 5): Feedback visual de loading
     container.innerHTML = `<div class="loading"><div class="spinner"></div></div>`;
     
     try {
@@ -457,7 +563,8 @@ async function loadAdoptionPets() {
         const filters = getPetFilters();
         const adoptionPets = await apiFetch(`/pets/adoption?${filters}`);
         
-        pets = adoptionPets; 
+        // BLOCO 6 (Tarefa 1): Armazena no AppState
+        AppState.adoptionPets = adoptionPets; 
         
         if (adoptionPets.length === 0) {
             container.innerHTML = `
@@ -487,7 +594,8 @@ async function loadMyPets() {
 
     try {
         const myPets = await apiFetch('/pets/mypets'); 
-        pets = myPets; 
+        // BLOCO 6 (Tarefa 1): Armazena no AppState
+        AppState.myPets = myPets; 
 
         if (myPets.length === 0) {
             container.innerHTML = `
@@ -503,7 +611,9 @@ async function loadMyPets() {
         }
         displayPets(myPets, container, false);
     } catch (error) {
-        container.innerHTML = `<div class="empty-state"><h3>Erro ao carregar seus pets. Tente novamente.</h3><p>${error.message}</p></div>`;
+        // BLOCO 6 (Tarefa 6): Mostra erro padronizado
+        // BLOCO 6 (Tarefa 7): Higieniza a mensagem de erro
+        container.innerHTML = `<div class="empty-state"><h3>Erro ao carregar seus pets. Tente novamente.</h3><p>${escapeHTML(error.message)}</p></div>`;
     }
 }
 
@@ -521,17 +631,21 @@ function getStatusIndicator(pet) {
 
 
 function displayPets(petsToShow, container, isAdoptionView) {
+    // BLOCO 6 (Tarefa 7): Higieniza toda a renderização
     container.innerHTML = petsToShow.map(pet => {
         const ownerName = pet.ownerName || 'Dono';
         const upcomingVaccines = getUpcomingVaccines(pet);
         
-        const petImage = pet.photoUrl ? `<img src="${pet.photoUrl}" alt="Foto de ${pet.name}">` : getSpeciesIcon(pet.species);
+        // BLOCO 6 (Tarefa 4): Lazy loading
+        const petImage = pet.photoUrl ? `<img loading="lazy" src="${escapeAttr(pet.photoUrl)}" alt="Foto de ${escapeAttr(pet.name)}">` : getSpeciesIcon(pet.species);
         
         let actionButtons = '';
         if (isAdoptionView) {
             actionButtons = `<button class="btn btn-small" onclick="openPetProfile(${pet.id})">Ver Perfil</button>`;
-            if (currentUser) {
-                actionButtons += ` <button class="btn btn-small" onclick="showContact(${pet.ownerId}, '${pet.ownerName}', '${pet.ownerPhone}', '${pet.ownerEmail}')" style="background: #38a169;">Contato</button>`;
+            // BLOCO 6 (Tarefa 1): Checa AppState.currentUser
+            if (AppState.currentUser) {
+                // BLOCO 6 (Tarefa 7): Escapa atributos do onclick
+                actionButtons += ` <button class="btn btn-small" onclick="showContact(${pet.ownerId}, '${escapeAttr(ownerName)}', '${escapeAttr(pet.ownerPhone)}', '${escapeAttr(pet.ownerEmail)}')" style="background: #38a169;">Contato</button>`;
             } else {
                 actionButtons += ` <button class="btn btn-small" onclick="showPage('login')" style="background: #a0aec0;">Logar para Contato</button>`;
             }
@@ -539,7 +653,8 @@ function displayPets(petsToShow, container, isAdoptionView) {
             actionButtons = `<button class="btn btn-small" onclick="openPetProfile(${pet.id})">Ver Perfil</button>`;
             
           
-            if (currentUser && pet.ownerId == currentUser.id) {
+            // BLOCO 6 (Tarefa 1): Checa AppState.currentUser
+            if (AppState.currentUser && pet.ownerId == AppState.currentUser.id) {
                  actionButtons += `<button class="btn btn-small" onclick="showPetRegisterPage(${pet.id})" style="background: #4299e1;">Editar</button>`;
             }
 
@@ -547,7 +662,8 @@ function displayPets(petsToShow, container, isAdoptionView) {
                 actionButtons += `<button class="btn btn-small" onclick="openVaccinationModal(${pet.id})" style="background: #ed8936;">+ Vacina</button>`;
             } else if (pet.type === 'adoption' && pet.status === 'available') {
                
-                if (currentUser && pet.ownerId == currentUser.id) {
+                // BLOCO 6 (Tarefa 1): Checa AppState.currentUser
+                if (AppState.currentUser && pet.ownerId == AppState.currentUser.id) {
                     actionButtons += `<button class="btn btn-small" onclick="markAsAdopted(${pet.id})" style="background: #38a169;">Marcar como Adotado</button>`;
                 }
             }
@@ -559,11 +675,11 @@ function displayPets(petsToShow, container, isAdoptionView) {
                     ${petImage}
                 </div>
                 <div class="pet-info">
-                    <div class="pet-name">${pet.name}</div>
+                    <div class="pet-name">${escapeHTML(pet.name)}</div>
                     <div class="pet-details">
                         <div class="pet-detail-item">
                             <span>Espécie:</span>
-                            <span>${getSpeciesIcon(pet.species)} ${pet.species === 'dog' ? 'Cão' : pet.species === 'cat' ? 'Gato' : pet.species}</span>
+                            <span>${getSpeciesIcon(pet.species)} ${pet.species === 'dog' ? 'Cão' : pet.species === 'cat' ? 'Gato' : escapeHTML(pet.species)}</span>
                         </div>
                         <div class="pet-detail-item">
                             <span>Idade:</span>
@@ -574,7 +690,7 @@ function displayPets(petsToShow, container, isAdoptionView) {
                             <span>${getSizeLabel(pet.size)}</span>
                         </div>
                     </div>
-                    <div class="pet-description">${pet.description}</div>
+                    <div class="pet-description">${escapeHTML(pet.description)}</div>
                     ${upcomingVaccines.length > 0 ? 
                         `<div style="background: #fff8e1; padding: 10px; border-radius: 8px; margin-bottom: 15px; border-left: 3px solid #ed8936;">
                             <small style="color: #ed8936; font-weight: 600;">⚠️ ${upcomingVaccines.length} vacina(s) próxima(s) do vencimento</small>
@@ -621,9 +737,12 @@ async function markAsAdopted(petId) {
     if (confirm("Você tem certeza que deseja marcar este pet como adotado? Esta ação removerá o pet da lista pública de adoção.")) {
         try {
             await apiFetch(`/pets/${petId}/adopt`, { method: 'PUT' });
-            loadMyPets(); 
+            // BLOCO 6 (Tarefa 6): Feedback de sucesso
+            showMessage('myPetsMessage', 'Pet marcado como adotado com sucesso!', 'success');
+            loadMyPets(); // Recarrega a lista
         } catch (error) {
-            alert(`Erro: ${error.message}`);
+            // BLOCO 6 (Tarefa 6): Substitui alert
+            showMessage('myPetsMessage', `Erro: ${error.message}`, 'error');
         }
     }
 }
@@ -641,10 +760,6 @@ function getPetFilters() {
     if (age) params.append('age', age);
 
     return params.toString();
-}
-
-function filterPets() {
-    loadAdoptionPets();
 }
 
 
@@ -674,7 +789,8 @@ async function loadServices() {
 
     try {
         const services = await apiFetch(`/services?${params.toString()}`);
-        serviceProviders = services; 
+        // BLOCO 6 (Tarefa 1): Armazena no AppState
+        AppState.serviceProviders = services; 
         displayServiceProviders(services, container);
     } catch (error) {
         container.innerHTML = `<div class="empty-state"><h3>Erro ao carregar serviços.</h3></div>`;
@@ -693,30 +809,33 @@ function displayServiceProviders(providersToShow, container) {
                 <p>Tente ajustar os filtros de busca.</p>
             </div>`;
     } else {
+        // BLOCO 6 (Tarefa 7): Higieniza toda a renderização
         container.innerHTML = providersToShow.map(provider => {
             
-            let providerDetails = `<p><strong>Descrição:</strong> ${provider.description}</p>`;
+            let providerDetails = `<p><strong>Descrição:</strong> ${escapeHTML(provider.description)}</p>`;
             let providerActionsContent = '';
             
             // O backend retorna "Faça login para ver" se o usuário não estiver logado
             const isLoggedIn = (provider.phone !== "Faça login para ver");
 
             if (isLoggedIn) {
-                providerDetails += `<p><strong>Endereço:</strong> ${provider.address}</p>`;
+                providerDetails += `<p><strong>Endereço:</strong> ${escapeHTML(provider.address)}</p>`;
                 providerActionsContent += `
-                    <a href="tel:${provider.phone.replace(/\D/g,'')}" class="btn btn-small" style="background: #38a169;">
-                        📞 Ligar (${provider.phone})
+                    <a href="tel:${escapeAttr(provider.phone.replace(/\D/g,''))}" class="btn btn-small" style="background: #38a169;">
+                        📞 Ligar (${escapeHTML(provider.phone)})
                     </a>`;
                 
                 // Botão de API de Mapas
                 if (provider.latitude && provider.longitude) {
+                    // JSON.stringify é seguro e escapa dados para uso em JS
                     providerActionsContent += `
                         <button class="btn btn-small" onclick='showServiceMapInModal(${JSON.stringify(provider)})' style="background: #3182ce;">
                             🗺️ Ver no Mapa
                         </button>`;
                 }
                 
-            if (currentUser && currentUser.id == provider.ownerId) {
+            // BLOCO 6 (Tarefa 1): Checa AppState.currentUser
+            if (AppState.currentUser && AppState.currentUser.id == provider.ownerId) {
                     providerActionsContent += `
                         <button class="btn btn-small" onclick="showServiceRegisterPage(${provider.id})" style="background: #4299e1;">
                             Editar
@@ -738,8 +857,8 @@ function displayServiceProviders(providersToShow, container) {
             return `
                 <div class="provider-card">
                     <div class="provider-header">
-                        <h3 class="provider-name">${provider.name}</h3>
-                        <span class="provider-professional">${provider.professional}</span>
+                        <h3 class="provider-name">${escapeHTML(provider.name)}</h3>
+                        <span class="provider-professional">${escapeHTML(provider.professional)}</span>
                     </div>
                     <div class="provider-info">
                         ${providerDetails}
@@ -753,10 +872,6 @@ function displayServiceProviders(providersToShow, container) {
     }
 }
 
-
-function filterServices() {
-    loadServices();
-}
 
 async function showServiceRegisterPage(serviceId = null) {
     try {
@@ -781,10 +896,12 @@ async function showServiceRegisterPage(serviceId = null) {
         
         getDeviceLocationForServiceForm();
     } else {
-        const service = serviceProviders.find(s => s.id === serviceId);
+        // BLOCO 6 (Tarefa 1): Lê do AppState
+        const service = AppState.serviceProviders.find(s => s.id === serviceId);
         
         
-           if (service && service.ownerId == currentUser.id) {
+           // BLOCO 6 (Tarefa 1): Checa AppState.currentUser
+           if (service && service.ownerId == AppState.currentUser.id) {
             title.textContent = 'Atualizar Serviço';
             button.textContent = 'Atualizar Serviço';
             hiddenId.value = service.id;
@@ -797,7 +914,8 @@ async function showServiceRegisterPage(serviceId = null) {
             document.getElementById('serviceAddress').value = service.address;
             document.getElementById('serviceDescription').value = service.description;
         } else {
-            alert("Serviço não encontrado ou você não tem permissão para editá-lo.");
+            // BLOCO 6 (Tarefa 6): Substitui alert
+            showMessage('serviceRegisterMessage', "Serviço não encontrado ou você não tem permissão para editá-lo.", 'error');
             return;
         }
     }
@@ -827,6 +945,11 @@ async function handleServiceRegistration(event) {
         return;
     }
 
+    // BLOCO 6 (Tarefa 5): Feedback no botão
+    const button = event.target.querySelector('button[type="submit"]');
+    const buttonText = serviceId ? 'Atualizar Serviço' : 'Cadastrar Serviço';
+    setButtonLoading(button, true, buttonText);
+
     try {
         if (serviceId) {
             await apiFetch(`/services/${serviceId}`, {
@@ -842,12 +965,14 @@ async function handleServiceRegistration(event) {
             showMessage('serviceRegisterMessage', 'Serviço cadastrado com sucesso!', 'success');
         }
         
+        setButtonLoading(button, false, buttonText);
         document.getElementById('serviceRegisterForm').reset();
         document.getElementById('serviceEditId').value = '';
         setTimeout(() => showPage('services'), 2000);
 
     } catch (error) {
          showMessage('serviceRegisterMessage', `Erro: ${error.message}`, 'error');
+         setButtonLoading(button, false, buttonText); // Reseta no erro
     }
 }
 
@@ -879,7 +1004,9 @@ async function handleVaccination(event) {
     try {
         await checkAuth();
     } catch (error) {
-        alert('Sessão expirada. Faça login novamente para adicionar vacinas.');
+        // BLOCO 6 (Tarefa 6): Substitui alert
+        // Tenta encontrar um 'vaccinationMessage' no modal
+        showMessage('vaccinationMessage', 'Sessão expirada. Faça login novamente para adicionar vacinas.', 'error');
         return;
     }
     
@@ -891,7 +1018,8 @@ async function handleVaccination(event) {
     const notes = document.getElementById('vaccineNotes').value.trim();
 
     if (!name || !date) {
-        alert('Por favor, preencha os campos obrigatórios (Nome da Vacina e Data).');
+        // BLOCO 6 (Tarefa 6): Substitui alert
+        showMessage('vaccinationMessage', 'Por favor, preencha os campos obrigatórios (Nome da Vacina e Data).', 'error');
         return;
     }
 
@@ -903,6 +1031,10 @@ async function handleVaccination(event) {
         notes: notes || null
     };
 
+    // BLOCO 6 (Tarefa 5): Feedback no botão
+    const button = event.target.querySelector('button[type="submit"]');
+    setButtonLoading(button, true, 'Adicionar Vacina');
+
     try {
         
         const newVaccine = await apiFetch(`/pets/${petId}/vaccines`, {
@@ -911,20 +1043,27 @@ async function handleVaccination(event) {
         });
         
       
-        const pet = pets.find(p => p.id === petId);
+        // BLOCO 6 (Tarefa 1): Atualiza o pet correto no AppState
+        let pet = AppState.myPets.find(p => p.id === petId);
+        if (!pet) {
+            pet = AppState.adoptionPets.find(p => p.id === petId);
+        }
         if (pet) {
-            
+            // Adiciona no início da lista
             pet.vaccines.unshift(newVaccine);
         }
         
+        setButtonLoading(button, false, 'Adicionar Vacina');
         closeVaccinationModal();
-        openPetProfile(petId); 
+        openPetProfile(petId); // Re-renderiza o modal do pet com a nova vacina
 
         if (document.getElementById('my-pets').classList.contains('active')) {
             loadMyPets(); 
         }
     } catch (error) {
-        alert(`Erro ao adicionar vacina: ${error.message}`);
+        // BLOCO 6 (Tarefa 6): Substitui alert
+        showMessage('vaccinationMessage', `Erro ao adicionar vacina: ${error.message}`, 'error');
+        setButtonLoading(button, false, 'Adicionar Vacina'); // Reseta no erro
     }
 }
 
@@ -985,21 +1124,26 @@ function closeVaccinationModal() {
 // 9. GERENCIAMENTO DE MODAIS
 
 function openPetProfile(petId) {
-    const pet = pets.find(p => p.id === petId);
+    // BLOCO 6 (Tarefa 1): Busca o pet em *ambos* os arrays de estado
+    const pet = AppState.adoptionPets.find(p => p.id === petId) || AppState.myPets.find(p => p.id === petId);
     if (!pet) return;
 
    
-   // Compara o ID do dono do pet com o ID do usuário logado (currentUser.id)
-   const isOwner = currentUser && (currentUser.id == pet.ownerId);
-   const petImage = pet.photoUrl ? `<img src="${pet.photoUrl}" alt="Foto de ${pet.name}" style="width: 100%; height: 100%; object-fit: cover;">` : getSpeciesIcon(pet.species);
+   // BLOCO 6 (Tarefa 1): Checa AppState.currentUser
+   const isOwner = AppState.currentUser && (AppState.currentUser.id == pet.ownerId);
+   // BLOCO 6 (Tarefa 4): Lazy loading
+   // BLOCO 6 (Tarefa 7): Higienização
+   const petImage = pet.photoUrl ? `<img loading="lazy" src="${escapeAttr(pet.photoUrl)}" alt="Foto de ${escapeAttr(pet.name)}" style="width: 100%; height: 100%; object-fit: cover;">` : getSpeciesIcon(pet.species);
 
     let adoptionButton = '';
     // Se for pet de adoção, disponível, e o usuário NÃO for o dono
     if (pet.type === 'adoption' && pet.status === 'available' && !isOwner) {
-        if (currentUser) {
+        // BLOCO 6 (Tarefa 1): Checa AppState.currentUser
+        if (AppState.currentUser) {
+            // BLOCO 6 (Tarefa 7): Escapa atributos do onclick
             adoptionButton = `
                 <div style="text-align: center; margin-top: 25px;">
-                    <button class="btn" onclick="showContact(${pet.ownerId}, '${pet.ownerName}', '${pet.ownerPhone}', '${pet.ownerEmail}')" style="background: #38a169; width: auto; padding: 15px 30px;">
+                    <button class="btn" onclick="showContact(${pet.ownerId}, '${escapeAttr(pet.ownerName)}', '${escapeAttr(pet.ownerPhone)}', '${escapeAttr(pet.ownerEmail)}')" style="background: #38a169; width: auto; padding: 15px 30px;">
                         💬 Entrar em Contato para Adoção
                     </button>
                 </div>`;
@@ -1021,12 +1165,12 @@ function openPetProfile(petId) {
             </div>`;
     }
 
+    // BLOCO 6 (Tarefa 7): Higieniza toda a renderização do innerHTML
     document.getElementById('petModalContent').innerHTML = `
         <div style="text-align: center; margin-bottom: 30px;">
             <div style="font-size: 5rem; margin-bottom: 15px; width: 150px; height: 150px; border-radius: 50%; overflow: hidden; margin: 0 auto; background: #f0f0f0; display: flex; align-items: center; justify-content: center;">
-                ${petImage}
-            </div>
-            <h2 style="color: #2d3748; margin-bottom: 10px;">${pet.name}</h2>
+                ${petImage} </div>
+            <h2 style="color: #2d3748; margin-bottom: 10px;">${escapeHTML(pet.name)}</h2>
             <p style="color: #718096;">Cadastrado em ${formatDate(pet.createdAt)}</p>
             <div>${getStatusIndicator(pet)}</div>
         </div>
@@ -1049,8 +1193,8 @@ function openPetProfile(petId) {
             </div>
         </div>
         <div style="margin-bottom: 25px;">
-            <h4 style="color: #2d3748; margin-bottom: 10px; font-size: 1.1rem;">📝 Sobre ${pet.name}</h4>
-            <p style="color: #4a5568; line-height: 1.6; background: #f7fafc; padding: 15px; border-radius: 10px;">${pet.description}</p>
+            <h4 style="color: #2d3748; margin-bottom: 10px; font-size: 1.1rem;">📝 Sobre ${escapeHTML(pet.name)}</h4>
+            <p style="color: #4a5568; line-height: 1.6; background: #f7fafc; padding: 15px; border-radius: 10px;">${escapeHTML(pet.description)}</p>
         </div>
 
         <div class="vaccination-section">
@@ -1062,9 +1206,9 @@ function openPetProfile(petId) {
                 ${pet.vaccines.length > 0 ? pet.vaccines.sort((a, b) => new Date(b.date) - new Date(a.date)).map(vaccine => `
                     <div class="vaccination-item ${isVaccineUpcoming(vaccine) ? 'upcoming' : ''}">
                         <div class="vaccination-info">
-                            <h4>💉 ${vaccine.name}</h4>
-                            <p>Aplicada em ${formatDate(vaccine.date)} ${vaccine.vet ? `(Vet: ${vaccine.vet})` : ''}</p>
-                            ${vaccine.notes ? `<p style="font-size: 0.85rem; color: #718096; margin-top: 5px;"><i>Obs: ${vaccine.notes}</i></p>` : ''}
+                            <h4>💉 ${escapeHTML(vaccine.name)}</h4>
+                            <p>Aplicada em ${formatDate(vaccine.date)} ${vaccine.vet ? `(Vet: ${escapeHTML(vaccine.vet)})` : ''}</p>
+                            ${vaccine.notes ? `<p style="font-size: 0.85rem; color: #718096; margin-top: 5px;"><i>Obs: ${escapeHTML(vaccine.notes)}</i></p>` : ''}
                         </div>
                         <div class="vaccination-date ${isVaccineUpcoming(vaccine) ? 'upcoming' : ''}">
                             ${vaccine.nextDate ? `Próxima: ${formatDate(vaccine.nextDate)}` : 'Dose única'}
@@ -1094,7 +1238,7 @@ async function openVaccinationModal(petId) {
     try {
         await checkAuth(); 
     } catch (error) {
-        return; 
+        return;
     }
     
     document.getElementById('vaccinePetId').value = petId;
@@ -1109,21 +1253,22 @@ function closeVaccinationModal() {
 
 function showContact(ownerId, ownerName, ownerPhone, ownerEmail) {
 
+    // BLOCO 6 (Tarefa 7): Higieniza os dados de contato
     document.getElementById('contactModalContent').innerHTML = `
         <div style="text-align: center; margin-bottom: 30px;">
             <div style="font-size: 4rem; margin-bottom: 15px;">👤</div>
-            <h3 style="color: #2d3748; margin-bottom: 5px;">${ownerName}</h3>
+            <h3 style="color: #2d3748; margin-bottom: 5px;">${escapeHTML(ownerName)}</h3>
             <p style="color: #718096;">Responsável pelo pet</p>
         </div>
         <div style="background: #f7fafc; border-radius: 10px; padding: 25px; margin-bottom: 25px;">
             <h4 style="color: #2d3748; margin-bottom: 15px;">📞 Informações de Contato</h4>
             <div style="margin-bottom: 15px;">
                 <strong style="color: #4a5568;">Email:</strong>
-                <a href="mailto:${ownerEmail}" style="color: #667eea; text-decoration: none; margin-left: 10px;">${ownerEmail}</a>
+                <a href="mailto:${escapeAttr(ownerEmail)}" style="color: #667eea; text-decoration: none; margin-left: 10px;">${escapeHTML(ownerEmail)}</a>
             </div>
             <div>
                 <strong style="color: #4a5568;">Telefone:</strong>
-                <a href="tel:${ownerPhone.replace(/\D/g,'')}" style="color: #667eea; text-decoration: none; margin-left: 10px;">${ownerPhone}</a>
+                <a href="tel:${escapeAttr(ownerPhone.replace(/\D/g,''))}" style="color: #667eea; text-decoration: none; margin-left: 10px;">${escapeHTML(ownerPhone)}</a>
             </div>
         </div>
     `;
@@ -1152,7 +1297,8 @@ function toggleNewPostForm(show) {
     } else {
         postContainer.style.display = 'none';
         // Mostra o botão "+ Escrever Novo Post" apenas se o usuário estiver logado
-        if (currentUser) {
+        // BLOCO 6 (Tarefa 1): Checa AppState.currentUser
+        if (AppState.currentUser) {
             blogActions.style.display = 'block';
         }
     }
@@ -1164,7 +1310,8 @@ async function loadBlogPosts() {
     const feedContainer = document.getElementById('blogFeed');
 
     // Controla a visibilidade dos botões de ação do blog
-    if (currentUser) {
+    // BLOCO 6 (Tarefa 1): Checa AppState.currentUser
+    if (AppState.currentUser) {
         blogActions.style.display = 'block';
         // Esconde o formulário se não estiver em modo de edição
         if (!document.getElementById('postEditId').value) {
@@ -1179,7 +1326,8 @@ async function loadBlogPosts() {
     
     try {
         const posts = await apiFetch('/blog'); 
-        blogPosts = posts; 
+        // BLOCO 6 (Tarefa 1): Armazena no AppState
+        AppState.blogPosts = posts; 
         displayBlogPosts(posts, feedContainer);
     } catch (error) {
         feedContainer.innerHTML = `<div class="empty-state"><h3>Erro ao carregar o blog. Tente novamente.</h3></div>`;
@@ -1197,15 +1345,19 @@ function displayBlogPosts(posts, container) {
         return;
     }
 
+    // BLOCO 6 (Tarefa 7): Higieniza toda a renderização
     container.innerHTML = posts.map(post => {
         const ownerName = post.ownerName || 'Usuário';
-        const isOwner = currentUser && (currentUser.id == post.ownerId);
+        // BLOCO 6 (Tarefa 1): Checa AppState.currentUser
+        const isOwner = AppState.currentUser && (AppState.currentUser.id == post.ownerId);
+        
+        // BLOCO 6 (Tarefa 4): Lazy loading
         const postImageHTML = post.photoUrl 
-            ? `<img src="${post.photoUrl}" alt="Foto do post" class="post-image">` 
+            ? `<img loading="lazy" src="${escapeAttr(post.photoUrl)}" alt="Foto do post" class="post-image">` 
             : '';
 
         const postLocationHTML = post.location 
-            ? `<div class="post-location">📍 ${post.location}</div>` 
+            ? `<div class="post-location">📍 ${escapeHTML(post.location)}</div>` 
             : '';
 
         const editButtonHTML = isOwner
@@ -1214,26 +1366,29 @@ function displayBlogPosts(posts, container) {
             
         let avatarHtml = '';
         if (post.ownerPhotoUrl) {
-            avatarHtml = `<img src="${post.ownerPhotoUrl}" alt="${ownerName}" class="post-author-avatar-img">`;
+            // BLOCO 6 (Tarefa 4): Lazy loading
+            avatarHtml = `<img loading="lazy" src="${escapeAttr(post.ownerPhotoUrl)}" alt="${escapeAttr(ownerName)}" class="post-author-avatar-img">`;
         } else {
-            const avatarLetter = ownerName.charAt(0).toUpperCase();
+            const avatarLetter = escapeHTML(ownerName).charAt(0).toUpperCase();
             avatarHtml = `${avatarLetter}`;
         }
 
-        const userHasLiked = currentUser && post.likes.includes(currentUser.id);
+        // BLOCO 6 (Tarefa 1): Checa AppState.currentUser
+        const userHasLiked = AppState.currentUser && post.likes.includes(AppState.currentUser.id);
         const likeBtnActive = userHasLiked ? 'active' : '';
         const likeCount = post.likes.length;
         const likeText = likeCount === 1 ? 'curtida' : 'curtidas';
 
-        // Lógica de Comentários
+        // Lógica de Comentários (Higienizada)
         const commentsHTML = post.comments.map(comment => `
             <div class="comment-item">
-                <strong class="comment-author">${comment.ownerName || 'Usuário'}</strong>
-                <p class="comment-content">${comment.content}</p>
+                <strong class="comment-author">${escapeHTML(comment.ownerName || 'Usuário')}</strong>
+                <p class="comment-content">${escapeHTML(comment.content)}</p>
             </div>
         `).join('');
 
-        const commentFormHTML = currentUser ? `
+        // BLOCO 6 (Tarefa 1): Checa AppState.currentUser
+        const commentFormHTML = AppState.currentUser ? `
             <form class="post-comment-form" onsubmit="handleCommentSubmit(event, ${post.id})">
                 <input type="text" class="comment-input" placeholder="Escreva um comentário..." required>
                 <button type="submit" class="comment-submit-btn">Enviar</button>
@@ -1248,14 +1403,14 @@ function displayBlogPosts(posts, container) {
                             ${avatarHtml}
                         </div>
                         <div class="post-author-details">
-                            <span class="post-author-name">${ownerName}</span>
+                            <span class="post-author-name">${escapeHTML(ownerName)}</span>
                             <span class="post-date">${formatDateTime(post.createdAt)}</span>
                         </div>
                     </div>
                     <div class="post-actions-menu">${editButtonHTML}</div>
                 </div>
                 <div class="post-body">
-                    <div class="post-content">${post.content}</div>
+                    <div class="post-content">${escapeHTML(post.content)}</div>
                     ${postLocationHTML}
                     ${postImageHTML}
                 </div>
@@ -1302,8 +1457,10 @@ async function showPostForm(postId = null) {
         deleteButtonWrapper.style.display = 'none';
         getDeviceLocationForPostForm();
     } else {
-        const post = blogPosts.find(p => p.id === postId);
-        if (post && post.ownerId == currentUser.id) {
+        // BLOCO 6 (Tarefa 1): Lê do AppState
+        const post = AppState.blogPosts.find(p => p.id === postId);
+        // BLOCO 6 (Tarefa 1): Checa AppState.currentUser
+        if (post && post.ownerId == AppState.currentUser.id) {
             title.textContent = 'Editar Post';
             button.textContent = 'Atualizar';
             hiddenId.value = post.id;
@@ -1315,7 +1472,8 @@ async function showPostForm(postId = null) {
             document.getElementById('new-post-container').scrollIntoView({ behavior: 'smooth', block: 'center' });
 
         } else {
-            alert("Post não encontrado ou você não tem permissão para editá-lo.");
+            // BLOCO 6 (Tarefa 6): Substitui alert
+            showMessage('postMessage', "Post não encontrado ou você não tem permissão para editá-lo.", 'error');
             toggleNewPostForm(false);
             return;
         }
@@ -1340,10 +1498,16 @@ async function handlePostSubmit(event) {
         showMessage('postMessage', 'O conteúdo do post não pode estar vazio.', 'error');
         return;
     }
+
+    // BLOCO 6 (Tarefa 5): Feedback no botão
+    const button = form.querySelector('button[type="submit"]');
+    const buttonText = postId ? 'Atualizar' : 'Publicar';
+    setButtonLoading(button, true, buttonText);
     
     // Lógica para manter a foto antiga ao editar (se nenhuma nova for enviada)
     if (postId) {
-        const post = blogPosts.find(p => p.id === parseInt(postId));
+        // BLOCO 6 (Tarefa 1): Lê do AppState
+        const post = AppState.blogPosts.find(p => p.id === parseInt(postId));
         // Se não houver arquivo novo (req.file) E o post antigo tiver foto,
         // envia a URL antiga para o backend não apagar.
         if (!formData.get('photo').size && post && post.photoUrl) {
@@ -1364,10 +1528,12 @@ async function handlePostSubmit(event) {
         const message = postId ? 'atualizado' : 'publicado';
         showMessage('postMessage', `Post ${message} com sucesso!`, 'success');
 
+        setButtonLoading(button, false, buttonText);
         toggleNewPostForm(false);
         loadBlogPosts();
     } catch (error) {
         showMessage('postMessage', `Erro: ${error.message}`, 'error');
+        setButtonLoading(button, false, buttonText); // Reseta no erro
     }
 }
 
@@ -1388,7 +1554,8 @@ async function handlePostSubmit(event) {
             toggleNewPostForm(false);
             loadBlogPosts(); // Recarrega o feed
         } catch (error) {
-            alert(`Erro ao excluir: ${error.message}`);
+            // BLOCO 6 (Tarefa 6): Substitui alert
+            showMessage('postMessage', `Erro ao excluir: ${error.message}`, 'error');
         }
     }
 }
@@ -1398,6 +1565,9 @@ async function toggleLike(postId) {
     try {
         await checkAuth(); 
     } catch (error) {
+        // BLOCO 6 (Tarefa 6): Substitui alert por showMessage
+        // Tenta mostrar a mensagem no feed do blog
+        showMessage('postMessage', 'Você precisa estar logado para curtir.', 'error');
         return; 
     }
 
@@ -1405,10 +1575,11 @@ async function toggleLike(postId) {
         // A API cuida da lógica de adicionar/remover
         await apiFetch(`/blog/${postId}/like`, { method: 'POST' });
 
-        const post = blogPosts.find(p => p.id === postId);
+        // BLOCO 6 (Tarefa 1): Atualiza o AppState
+        const post = AppState.blogPosts.find(p => p.id === postId);
         const likeButton = document.querySelector(`#post-${postId} .like-btn`);
         const likeCountSpan = document.querySelector(`#post-${postId} .like-count`);
-        const myUserId = currentUser.id;
+        const myUserId = AppState.currentUser.id;
 
         if (post.likes.includes(myUserId)) {
             // Remove o like localmente
@@ -1422,10 +1593,12 @@ async function toggleLike(postId) {
 
         const likeCount = post.likes.length;
         const likeText = likeCount === 1 ? 'curtida' : 'curtidas';
+        // BLOCO 6 (Tarefa 7): Usa textContent
         likeCountSpan.textContent = `${likeCount} ${likeText}`;
         
     } catch (error) {
-        alert(`Erro ao curtir: ${error.message}`);
+        // BLOCO 6 (Tarefa 6): Substitui alert
+        showMessage('postMessage', `Erro ao curtir: ${error.message}`, 'error');
         // Se der erro, recarrega tudo para garantir consistência
         loadBlogPosts();
     }
@@ -1437,6 +1610,8 @@ async function handleCommentSubmit(event, postId) {
     try {
         await checkAuth(); 
     } catch (error) {
+        // BLOCO 6 (Tarefa 6): Substitui alert
+        showMessage('postMessage', 'Você precisa estar logado para comentar.', 'error');
         return; 
     }
 
@@ -1446,6 +1621,10 @@ async function handleCommentSubmit(event, postId) {
 
     if (!content) return;
 
+    // BLOCO 6 (Tarefa 5): Feedback no botão de comentário
+    const button = form.querySelector('.comment-submit-btn');
+    setButtonLoading(button, true, 'Enviar');
+
     try {
         const newComment = await apiFetch(`/blog/${postId}/comment`, {
             method: 'POST',
@@ -1453,16 +1632,19 @@ async function handleCommentSubmit(event, postId) {
         });
         
         input.value = '';
+        setButtonLoading(button, false, 'Enviar');
 
         
-        const post = blogPosts.find(p => p.id === postId);
+        // BLOCO 6 (Tarefa 1): Atualiza o AppState
+        const post = AppState.blogPosts.find(p => p.id === postId);
         post.comments.push(newComment); 
-        // Renderiza apenas o novo comentário
+
+        // BLOCO 6 (Tarefa 7): Higieniza o novo comentário
         const commentsList = document.querySelector(`#post-${postId} .post-comments-list`);
         const newCommentHTML = `
             <div class="comment-item">
-                <strong class="comment-author">${newComment.ownerName}</strong>
-                <p class="comment-content">${newComment.content}</p>
+                <strong class="comment-author">${escapeHTML(newComment.ownerName)}</strong>
+                <p class="comment-content">${escapeHTML(newComment.content)}</p>
             </div>
         `;
         
@@ -1475,7 +1657,9 @@ async function handleCommentSubmit(event, postId) {
         commentsList.scrollTop = commentsList.scrollHeight; // Rola para o novo comentário
 
     } catch (error) {
-        alert(`Erro ao comentar: ${error.message}`);
+        // BLOCO 6 (Tarefa 6): Substitui alert
+        showMessage('postMessage', `Erro ao comentar: ${error.message}`, 'error');
+        setButtonLoading(button, false, 'Enviar'); // Reseta no erro
     }
 }
 
@@ -1550,15 +1734,17 @@ function getDeviceLocationForServiceForm() {
 // API de Mapas (Leaflet.js). Mostra o mapa do serviço no modal de contato.
 function showServiceMapInModal(service) {
     if (!service.latitude || !service.longitude) {
-        alert('Este serviço não possui localização no mapa.');
+        // BLOCO 6 (Tarefa 6): Substitui alert
+        showMessage('contactModalMessage', 'Este serviço não possui localização no mapa.', 'error'); // Assumindo que o modal tem um 'contactModalMessage'
         return;
     }
 
     const modalContent = document.getElementById('contactModalContent');
+    // BLOCO 6 (Tarefa 7): Higieniza o nome e endereço
     modalContent.innerHTML = `
         <div style="text-align: center; margin-bottom: 20px;">
-            <h3 style="color: #2d3748;">${service.name}</h3>
-            <p style="color: #718096;">${service.address}</p>
+            <h3 style="color: #2d3748;">${escapeHTML(service.name)}</h3>
+            <p style="color: #718096;">${escapeHTML(service.address)}</p>
         </div>
         <div id="serviceMapContainer" style="height: 400px; width: 100%; border-radius: 10px;"></div>
     `;
@@ -1576,7 +1762,7 @@ function showServiceMapInModal(service) {
             }).addTo(map);
 
             L.marker([service.latitude, service.longitude]).addTo(map)
-                .bindPopup(`<strong>${service.name}</strong><br>${service.professional}`)
+                .bindPopup(`<strong>${escapeHTML(service.name)}</strong><br>${escapeHTML(service.professional)}`)
                 .openPopup();
         } catch(e) {
             console.error("Erro ao renderizar mapa Leaflet:", e);
@@ -1610,6 +1796,22 @@ document.addEventListener('DOMContentLoaded', function() {
     // Seção 10: Blog
     document.getElementById('postForm').addEventListener('submit', handlePostSubmit);
 
+    // BLOCO 6 (Tarefa 3): Adiciona listeners para filtros com debounce
+    const debouncedFilterPets = debounce(loadAdoptionPets, 400);
+    const debouncedFilterServices = debounce(loadServices, 400);
+
+    // --- Pet Filters ---
+    document.getElementById('searchFilter').addEventListener('keyup', debouncedFilterPets);
+    document.getElementById('speciesFilter').addEventListener('change', loadAdoptionPets);
+    document.getElementById('sizeFilter').addEventListener('change', loadAdoptionPets);
+    document.getElementById('ageFilter').addEventListener('change', loadAdoptionPets);
+
+    // --- Service Filters ---
+    document.getElementById('serviceSearchFilter').addEventListener('keyup', debouncedFilterServices);
+    document.getElementById('serviceCategoryFilter').addEventListener('change', loadServices);
+    // FIM (Tarefa 3)
+
+
     // Fecha qualquer modal ao clicar no fundo (fora do conteúdo)
     document.querySelectorAll('.modal').forEach(modal => {
         modal.addEventListener('click', function(e) {
@@ -1633,28 +1835,30 @@ document.addEventListener('DOMContentLoaded', function() {
             if (session) {
                 try {
                     const profile = await apiFetch('/auth/me'); 
-                    // Armazena o perfil (id, name, email, role, etc.)
-                    currentUser = profile; 
+                    // BLOCO 6 (Tarefa 1): Armazena no AppState
+                    AppState.currentUser = profile; 
                     
                 } catch (error) {
                     // Erro crítico: O usuário existe no Supabase Auth,
                     // mas não foi encontrado no nosso banco de dados 'users' (GET /me falhou).
-                    // Isso pode acontecer se o Trigger (Req 1) falhar.
                     console.error("Erro ao buscar perfil do usuário:", error.message);
-                    currentUser = null;
+                    // BLOCO 6 (Tarefa 1): Limpa o AppState
+                    AppState.currentUser = null;
                     // Força o logout do Supabase para evitar um estado inconsistente
                     await supabase.auth.signOut();
                 }
             } else {
                 // Sessão é nula, usuário não está logado
-                currentUser = null;
+                // BLOCO 6 (Tarefa 1): Limpa o AppState
+                AppState.currentUser = null;
             }
             // Atualiza a UI (avatar, botões de login/logout)
             updateAuthButtons();
         
         // Evento que indica que o usuário fez logout
         } else if (event === 'SIGNED_OUT') {
-            currentUser = null;
+            // BLOCO 6 (Tarefa 1): Limpa o AppState
+            AppState.currentUser = null;
             updateAuthButtons(); // Atualiza a UI
             
             // Recarrega dados públicos para limpar informações privadas

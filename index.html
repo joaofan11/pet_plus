@@ -246,17 +246,17 @@
             </div>
         </div>
 
-        <div id="adoption" class="page">
+<div id="adoption" class="page">
             <div style="padding: 30px 40px 0;">
                 <h2 style="text-align: center; margin-bottom: 40px; color: #2d3748; font-size: 2.2rem; font-weight: 700;">Pets Disponíveis para Adoção</h2>
                 <div class="filters">
                     <div class="filter-group">
                         <label>🔍 Buscar</label>
-                        <input type="text" id="searchFilter" placeholder="Nome ou raça..." onkeyup="filterPets()">
+                        <input type="text" id="searchFilter" placeholder="Nome ou raça...">
                     </div>
                     <div class="filter-group">
                         <label>🐾 Espécie</label>
-                        <select id="speciesFilter" onchange="filterPets()">
+                        <select id="speciesFilter">
                             <option value="">Todas</option>
                             <option value="dog">Cão</option>
                             <option value="cat">Gato</option>
@@ -264,7 +264,7 @@
                     </div>
                     <div class="filter-group">
                         <label>📏 Porte</label>
-                        <select id="sizeFilter" onchange="filterPets()">
+                        <select id="sizeFilter">
                             <option value="">Todos</option>
                             <option value="small">Pequeno</option>
                             <option value="medium">Médio</option>
@@ -273,7 +273,7 @@
                     </div>
                     <div class="filter-group">
                         <label>🎂 Idade</label>
-                        <select id="ageFilter" onchange="filterPets()">
+                        <select id="ageFilter">
                             <option value="">Todas</option>
                             <option value="puppy">Filhote</option>
                             <option value="young">Jovem</option>
@@ -281,60 +281,28 @@
                             <option value="senior">Idoso</option>
                         </select>
                     </div>
-                    <div class="filter-group">
-                        <label>📋 Ações</label>
-                        <button class="btn" onclick="showPetRegisterPage(null)" style="width: 100%; padding: 12px 20px; font-size: 0.9rem;">
-                            + Cadastrar Pet
-                        </button>
-                    </div>
-                </div>
-            </div>
-            <div id="adoptionPets" class="pets-grid">
-                </div>
-        </div>
 
-        <div id="my-pets" class="page">
+<div id="my-pets" class="page">
             <div style="padding: 30px 40px;">
+                
+                <div id="myPetsMessage" class="message" style="margin-bottom: 30px;"></div>
+
                 <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 40px; flex-wrap: wrap; gap: 20px;">
                     <h2 style="color: #2d3748; font-size: 2.2rem; font-weight: 700;">Meus Pets</h2>
-                    <button class="btn" onclick="showPetRegisterPage(null)" style="width: auto; padding: 15px 30px; font-size: 1rem;">
-                        + Adicionar Pet
-                    </button>
-                </div>
-                <div id="myPetsGrid" class="pets-grid">
-                    </div>
-            </div>
-        </div>
+.
 
-        <div id="services" class="page">
+<div id="services" class="page">
             <div style="padding: 30px 40px 0;">
                 <h2 style="text-align: center; margin-bottom: 40px; color: #2d3748; font-size: 2.2rem; font-weight: 700;">Encontre Serviços para seu Pet</h2>
                 <div class="filters">
                     <div class="filter-group">
                         <label>🔍 Buscar</label>
-                        <input type="text" id="serviceSearchFilter" placeholder="Nome, profissional ou bairro..." onkeyup="filterServices()">
+                        <input type="text" id="serviceSearchFilter" placeholder="Nome, profissional ou bairro...">
                     </div>
                     <div class="filter-group">
                         <label>🏷️ Categoria</label>
-                        <select id="serviceCategoryFilter" onchange="filterServices()">
+                        <select id="serviceCategoryFilter">
                             <option value="">Todas</option>
-                            <option value="vet">Veterinários</option>
-                            <option value="sitter">Cuidadores</option>
-                            <option value="walker">Passeadores</option>
-                            <option value="transport">Transporte Pet</option>
-                        </select>
-                    </div>
-                    <div class="filter-group">
-                        <label>📋 Ações</label>
-                        <button class="btn" onclick="showServiceRegisterPage(null)" style="width: 100%; padding: 12px 20px; font-size: 0.9rem;">
-                            + Cadastrar Serviço
-                        </button>
-                    </div>
-                </div>
-            </div>
-            <div id="servicesGrid" class="pets-grid" style="padding: 30px;">
-                </div>
-        </div>
         
         <div id="service-register" class="page">
             <div class="form-container">
