@@ -3,25 +3,28 @@ const router = require('express').Router();
 const db = require('../db');
 const checkAuth = require('../middleware/checkAuth');
 const multer = require('multer');
-// const path = require('path'); // <- NÃO É MAIS NECESSÁRIO
-
-// NOVO: Importar o helper do Supabase
-const { uploadFile } = require('../supabaseClient');
+const path = require('path');
 
 // --- Configuração do Multer (Upload de Imagem) ---
-// ALTERADO: Usar memoryStorage para enviar o buffer ao Supabase
-const storage = multer.memoryStorage();
+const storage = multer.diskStorage({
+  destination: (req, file, cb) => {
+    cb(null, 'uploads/');
+  },
+  filename: (req, file, cb) => {
+    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
+    cb(null, uniqueSuffix + '-' + file.originalname);
+  }
+});
 
-// ALTERADO: Adicionado 'webp' para consistência
 const fileFilter = (req, file, cb) => {
-  if (file.mimetype === 'image/jpeg' || file.mimetype === 'image/png' || file.mimetype === 'image/webp') {
+  if (file.mimetype === 'image/jpeg' || file.mimetype === 'image/png') {
     cb(null, true);
   } else {
-    cb(new Error('Formato de imagem não suportado (apenas JPG, PNG, WebP)'), false);
+    cb(new Error('Formato de imagem não suportado (apenas JPG e PNG)'), false);
   }
 };
 
-const upload = multer({ storage: storage, fileFilter: fileFilter })
+const upload = multer({ storage: storage, fileFilter: fileFilter });
 
 // --- Rotas de Pets ---
 
@@ -95,23 +98,15 @@ router.get('/mypets', checkAuth, async (req, res) => {
     } catch (err) { console.error(err); res.status(500).json({ message: 'Erro ao buscar "Meus Pets".' }); }
 });
 
-// POST /api/pets (Privado) -
+// POST /api/pets (Privado) - CORRIGIDO para UPLOAD
 router.post('/', checkAuth, upload.single('photo'), async (req, res) => {
     const { name, species, breed, age, size, gender, type, description } = req.body;
     
     let photoUrl = null;
-    // NOVO: Lógica de upload para Supabase
     if (req.file) {
-      try {
-        photoUrl = await uploadFile(
-            req.file.buffer, 
-            req.file.originalname, 
-            req.file.mimetype
-        );
-      } catch (uploadError) {
-        console.error(uploadError);
-        return res.status(500).json({ message: "Erro ao fazer upload da foto do pet." });
-      }
+      // Cria a URL completa para o frontend
+      const serverUrl = `${req.protocol}://${req.get('host')}`;
+      photoUrl = `${serverUrl}/${req.file.path.replace(/\\/g, "/")}`; // Trata barras no Windows
     }
 
     const status = (type === 'adoption') ? 'available' : 'personal';
@@ -124,32 +119,22 @@ router.post('/', checkAuth, upload.single('photo'), async (req, res) => {
                        owner_id AS "ownerId", photo_url AS "photoUrl", created_at AS "createdAt"`,
             [req.userData.userId, name, species, breed, age, size, gender, type, status, description, photoUrl]
         );
-        newPet.rows[0].vaccines = [];
+        newPet.rows[0].vaccines = []; // Novo pet começa sem vacinas
         res.status(201).json(newPet.rows[0]);
     } catch (err) { console.error(err); res.status(500).json({ message: 'Erro ao cadastrar pet.' }); }
 });
 
-// PUT /api/pets/:petId (Privado) -
+// PUT /api/pets/:petId (Privado) - CORRIGIDO para UPLOAD
 router.put('/:petId', checkAuth, upload.single('photo'), async (req, res) => {
     const { petId } = req.params;
     const { name, species, breed, age, size, gender, type, description } = req.body;
     const status = (type === 'adoption') ? 'available' : 'personal';
 
-    // O frontend envia a URL antiga se a foto não mudar
+    // Manter a foto antiga se nenhuma nova for enviada
     let photoUrl = req.body.photoUrl || null; 
-    
-    // NOVO: Se um *novo* arquivo foi enviado, faz o upload dele
     if (req.file) {
-      try {
-        photoUrl = await uploadFile(
-            req.file.buffer, 
-            req.file.originalname, 
-            req.file.mimetype
-        );
-      } catch (uploadError) {
-        console.error(uploadError);
-        return res.status(500).json({ message: "Erro ao atualizar a foto do pet." });
-      }
+      const serverUrl = `${req.protocol}://${req.get('host')}`;
+      photoUrl = `${serverUrl}/${req.file.path.replace(/\\/g, "/")}`;
     }
 
     try {
@@ -212,6 +197,5 @@ router.post('/:petId/vaccines', checkAuth, async (req, res) => {
         res.status(201).json(newVaccine.rows[0]);
     } catch (err) { console.error(err); res.status(500).json({ message: 'Erro ao adicionar vacina.' }); }
 });
-
 
 module.exports = router;
