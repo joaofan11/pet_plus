@@ -1,25 +1,31 @@
-// backend/server.js
 require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
-const path = require('path'); // <- IMPORTE O 'path'
-
+const path = require('path');
+const rateLimit = require('express-rate-limit');
+const cookieParser = require('cookie-parser');
 const app = express();
 const port = process.env.PORT || 3001;
 
-// Middlewares
+
 const corsOptions = {
-  origin: process.env.FRONTEND_URL, // Apenas permite o seu frontend
+  
+  origin: process.env.FRONTEND_URL,
+  credentials: true, // Permite que o frontend envie cookies
   optionsSuccessStatus: 200
 };
 app.use(cors(corsOptions));
-app.use(express.json()); // Parser para JSON
+app.use(express.json());
+app.use(cookieParser()); // Habilita o parser de cookies
 
-// Isso faz com que a URL http://localhost:3001/uploads/nome-da-imagem.png funcione
-app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
+const authLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutos
+  max: 10, // Limita cada IP a 10 requisições (login, register, refresh) por janela
+  message: 'Muitas tentativas de autenticação deste IP, tente novamente após 15 minutos'
+});
 
 // Rotas da API
-app.use('/api/auth', require('./routes/auth'));
+app.use('/api/auth', authLimiter, require('./routes/auth'));
 app.use('/api/pets', require('./routes/pets'));
 app.use('/api/services', require('./routes/services'));
 app.use('/api/blog', require('./routes/blog'));
@@ -33,5 +39,4 @@ app.get('/api', (req, res) => {
 app.listen(port, () => {
   console.log(`=====================Servidor rodando em http://localhost:${port}========================== Bem Vindo Ao Petplus
     `);
-
 });
