@@ -2,7 +2,7 @@
 // 1. ESTADO DA APLICAÇÃO
 // ===================================================================
 
-const API_URL = 'http://localhost:3001/api'; // URL do seu backend
+const API_URL = 'https://petplus-backend.onrender.com'; // URL do seu backend
 
 // currentUser armazena o objeto { user: { id, name, email }, token }
 let currentUser = null; 
@@ -1454,3 +1454,4 @@ document.addEventListener('DOMContentLoaded', function() {
     updateAuthButtons();
     loadAdoptionPets(); // Carrega a página inicial de adoção
 });
+
