@@ -3,19 +3,20 @@ const router = require('express').Router();
 const db = require('../db');
 const checkAuth = require('../middleware/checkAuth');
 const multer = require('multer');
-const path = require('path');
 
-// Configuração do Multer (igual ao de pets)
-const storage = multer.diskStorage({
-  destination: (req, file, cb) => { cb(null, 'uploads/'); },
-  filename: (req, file, cb) => {
-    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
-    cb(null, uniqueSuffix + '-' + file.originalname);
-  }
-});
+// Importar o helper do Supabase
+const { uploadFile } = require('../supabaseClient');
+
+// Configuração do Multer
+const storage = multer.memoryStorage();
+
+// ALTERADO: Adicionado 'webp' para consistência
 const fileFilter = (req, file, cb) => {
-  if (file.mimetype === 'image/jpeg' || file.mimetype === 'image/png') { cb(null, true); } 
-  else { cb(new Error('Formato de imagem não suportado (apenas JPG e PNG)'), false); }
+  if (file.mimetype === 'image/jpeg' || file.mimetype === 'image/png' || file.mimetype === 'image/webp') { 
+    cb(null, true); 
+  } else { 
+    cb(new Error('Formato de imagem não suportado (apenas JPG, PNG, WebP)'), false); 
+  }
 };
 const upload = multer({ storage: storage, fileFilter: fileFilter });
 
@@ -63,9 +64,18 @@ router.post('/', checkAuth, upload.single('photo'), async (req, res) => {
     const { content, location } = req.body;
     
     let photoUrl = null;
+    // NOVO: Lógica de upload para Supabase
     if (req.file) {
-      const serverUrl = `${req.protocol}://${req.get('host')}`;
-      photoUrl = `${serverUrl}/${req.file.path.replace(/\\/g, "/")}`;
+      try {
+        photoUrl = await uploadFile(
+            req.file.buffer, 
+            req.file.originalname, 
+            req.file.mimetype
+        );
+      } catch (uploadError) {
+        console.error(uploadError);
+        return res.status(500).json({ message: "Erro ao fazer upload da foto do post." });
+      }
     }
 
     try {
@@ -86,10 +96,21 @@ router.put('/:postId', checkAuth, upload.single('photo'), async (req, res) => {
     const { postId } = req.params;
     const { content, location } = req.body;
 
+    // O frontend envia a URL antiga se a foto não mudar
     let photoUrl = req.body.photoUrl || null;
+    
+    // NOVO: Se um *novo* arquivo foi enviado, faz o upload
     if (req.file) {
-      const serverUrl = `${req.protocol}://${req.get('host')}`;
-      photoUrl = `${serverUrl}/${req.file.path.replace(/\\/g, "/")}`;
+      try {
+        photoUrl = await uploadFile(
+            req.file.buffer, 
+            req.file.originalname, 
+            req.file.mimetype
+        );
+      } catch (uploadError) {
+        console.error(uploadError);
+        return res.status(500).json({ message: "Erro ao atualizar a foto do post." });
+      }
     }
 
     try {
@@ -154,3 +175,4 @@ router.post('/:postId/comment', checkAuth, async (req, res) => {
 
 
 module.exports = router;
+
