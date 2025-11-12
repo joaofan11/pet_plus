@@ -1,10 +1,20 @@
 // backend/services/authService.js
+
+// Módulos Nativos/Terceiros
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
+
+// Módulos Locais
 const authRepository = require('../repositories/authRepository');
 const { uploadFile } = require('../supabaseClient');
 const { BadRequestError, UnauthorizedError, NotFoundError, AppError } = require('../utils/errors');
 
+/**
+ * Registra um novo usuário.
+ * @param {Object} userData - Dados do corpo da requisição (name, email, phone, password).
+ * @param {import('multer').File} file - O arquivo de foto (opcional).
+ * @returns {Promise<Object>} O novo usuário.
+ */
 const registerUser = async (userData, file) => {
   const { name, email, phone, password } = userData;
 
@@ -19,7 +29,6 @@ const registerUser = async (userData, file) => {
       photoUrl = await uploadFile(file.buffer, file.originalname, file.mimetype);
     } catch (uploadError) {
       console.error(uploadError);
-      // Lança um erro genérico que o errorHandler tratará como 500
       throw new AppError('Erro ao fazer upload da foto.', 500);
     }
   }
@@ -31,23 +40,29 @@ const registerUser = async (userData, file) => {
   return newUser;
 };
 
+/**
+ * Autentica um usuário e retorna um token JWT.
+ * @param {string} email - Email do usuário.
+ * @param {string} password - Senha (plain text).
+ * @returns {Promise<Object>} Objeto contendo o token e os dados do usuário.
+ */
 const loginUser = async (email, password) => {
   const user = await authRepository.findUserByEmail(email);
   if (!user) {
     throw new UnauthorizedError('Email ou senha incorretos.');
   }
 
-  const isMatch = await bcrypt.compare(password, user.password_hash);
+  // Padronizado para camelCase (veio do repositório)
+  const isMatch = await bcrypt.compare(password, user.passwordHash);
   if (!isMatch) {
     throw new UnauthorizedError('Email ou senha incorretos.');
   }
 
-  // O payload do token deve ser enxuto, mas o seu funciona.
   const payload = {
     userId: user.id,
     name: user.name,
     email: user.email,
-    photoUrl: user.photo_url,
+    photoUrl: user.photoUrl, // Padronizado para camelCase
   };
 
   const token = jwt.sign(payload, process.env.JWT_SECRET, { expiresIn: '1d' });
@@ -59,11 +74,16 @@ const loginUser = async (email, password) => {
       name: user.name,
       email: user.email,
       phone: user.phone,
-      photoUrl: user.photo_url,
+      photoUrl: user.photoUrl, // Padronizado para camelCase
     },
   };
 };
 
+/**
+ * Busca o perfil de um usuário pelo ID.
+ * @param {number} userId - ID do usuário.
+ * @returns {Promise<Object>} Os dados do perfil do usuário.
+ */
 const getUserProfile = async (userId) => {
   const user = await authRepository.findUserById(userId);
   if (!user) {
@@ -72,15 +92,24 @@ const getUserProfile = async (userId) => {
   return user;
 };
 
+/**
+ * Atualiza o perfil de um usuário.
+ * @param {number} userId - ID do usuário.
+ * @param {Object} currentData - Dados atuais do usuário (do req.userData).
+ * @param {Object} newProfileData - Novos dados (name, email, phone).
+ * @param {import('multer').File} file - Novo arquivo de foto (opcional).
+ * @returns {Promise<Object>} O usuário atualizado.
+ */
 const updateUserProfile = async (userId, currentData, newProfileData, file) => {
     let { name, email, phone } = newProfileData;
-    let photoUrl = currentData.photo_url; // Mantém a foto antiga por padrão
+    // Padronizado para camelCase (veio do req.userData)
+    let photoUrl = currentData.photoUrl; 
     
     // 1. Lida com o upload de nova foto
     if (file) {
         try {
             photoUrl = await uploadFile(file.buffer, file.originalname, file.mimetype);
-            // TODO: Adicionar lógica para deletar a foto antiga do Supabase se desejar
+            // TODO: Adicionar lógica para deletar a foto antiga do Supabase
         } catch (uploadError) {
             console.error(uploadError);
             throw new AppError('Erro ao fazer upload da nova foto.', 500);

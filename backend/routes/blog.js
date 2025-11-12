@@ -1,30 +1,18 @@
 // backend/routes/blog.js
+
+// Módulos Nativos/Terceiros
 const router = require('express').Router();
-const blogController = require('../controllers/blogController');
+
+// Módulos Locais (Middleware)
 const checkAuth = require('../middleware/checkAuth');
 const validateRequest = require('../middleware/validateRequest');
+const upload = require('../config/multer'); // Importa a config centralizada
+
+// Módulos Locais (Controllers e Schemas)
+const blogController = require('../controllers/blogController');
 const schemas = require('../schemas/blogSchemas');
 
-// --- Configuração do Multer (Upload de Imagem) ---
-// Usando memoryStorage para integração com Supabase
-const multer = require('multer');
-const storage = multer.memoryStorage();
-
-const fileFilter = (req, file, cb) => {
-  if (file.mimetype === 'image/jpeg' || file.mimetype === 'image/png' || file.mimetype === 'image/webp') {
-    cb(null, true);
-  } else {
-    cb(new Error('Formato de imagem não suportado (apenas JPG, PNG, WebP)'), false);
-  }
-};
-
-const upload = multer({ 
-    storage: storage, 
-    fileFilter: fileFilter,
-    limits: { fileSize: 5 * 1024 * 1024 } // Limite de 5MB
-});
-// --- Fim da Configuração do Multer ---
-
+// --- Rotas de Blog ---
 
 // GET /api/blog (Público)
 router.get('/', blogController.getAllPosts);
@@ -33,7 +21,7 @@ router.get('/', blogController.getAllPosts);
 router.post(
   '/',
   checkAuth,
-  upload.single('photo'),
+  upload.single('photo'), // Usa a instância centralizada
   validateRequest(schemas.createPostSchema),
   blogController.createPost
 );
@@ -42,7 +30,7 @@ router.post(
 router.put(
   '/:postId',
   checkAuth,
-  upload.single('photo'),
+  upload.single('photo'), // Usa a instância centralizada
   validateRequest(schemas.updatePostSchema),
   blogController.updatePost
 );
