@@ -3,49 +3,52 @@ require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
 const path = require('path');
-const helmet = require('helmet'); // Adicionado: Cabeçalhos de segurança
-const rateLimit = require('express-rate-limit'); // Adicionado: Rate limiting
+const helmet = require('helmet');
+const rateLimit = require('express-rate-limit');
 const errorHandler = require('./middleware/errorHandler');
 
 const app = express();
 const port = process.env.PORT || 3001;
 
 // --- 1. Segurança Básica (Helmet) ---
-// crossOriginResourcePolicy: "cross-origin" permite que o frontend carregue imagens deste backend
 app.use(helmet({
-  crossOriginResourcePolicy: { policy: "cross-origin" }
+  crossOriginResourcePolicy: { policy: "cross-origin" },
+  // Permite que scripts inline ou de mesma origem sejam executados (importante para o frontend)
+  contentSecurityPolicy: false, 
 }));
 
-// --- 2. Rate Limiting (Proteção contra DDoS/Brute Force) ---
-// Limitador geral da API
+// --- 2. Rate Limiting ---
 const apiLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000, // 15 minutos
-  max: 100, // Limite de 100 requisições por IP
+  windowMs: 15 * 60 * 1000,
+  max: 100,
   message: 'Muitas requisições deste IP, tente novamente mais tarde.'
 });
 app.use('/api/', apiLimiter);
 
-// Limitador estrito para Autenticação (Login/Register)
 const authLimiter = rateLimit({
-  windowMs: 60 * 60 * 1000, // 1 hora
-  max: 10, // Limite de 10 tentativas de login/cadastro falhas
+  windowMs: 60 * 60 * 1000,
+  max: 20, // Aumentei levemente para evitar bloqueios durante testes
   message: 'Muitas tentativas de acesso. Tente novamente em uma hora.'
 });
 app.use('/api/auth', authLimiter);
 
-// --- 3. CORS (Já implementado corretamente) ---
+// --- 3. CORS ---
 const corsOptions = {
-  origin: process.env.FRONTEND_URL || '*', // Em produção, defina a URL exata do frontend
+  origin: process.env.FRONTEND_URL || '*',
   optionsSuccessStatus: 200
 };
 app.use(cors(corsOptions));
 
 app.use(express.json());
 
-// Servir arquivos estáticos (imagens)
+
+// Serve as imagens de upload
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
-// Rotas da API
+// Serve os arquivos do Frontend (HTML, CSS, JS)
+app.use(express.static(path.join(__dirname, '../frontend')));
+
+// --- 5. Rotas da API ---
 app.use('/api/auth', require('./routes/auth'));
 app.use('/api/pets', require('./routes/pets'));
 app.use('/api/services', require('./routes/services'));
@@ -53,12 +56,18 @@ app.use('/api/blog', require('./routes/blog'));
 
 // Rota de saúde
 app.get('/api', (req, res) => {
-  res.send('API PetPlus V1.0 funcionando e segura!');
+  res.send('API PetPlus V1.0 funcionando!');
+});
+
+// --- 6. Rota Catch-All (Para servir o index.html em qualquer outra rota) ---
+// Isso garante que se o usuário acessar /login ou /register direto, o HTML é carregado
+app.get('*', (req, res) => {
+  res.sendFile(path.join(__dirname, '../frontend/index.html'));
 });
 
 // Middleware de Erro (Sempre o último)
 app.use(errorHandler);
 
 app.listen(port, () => {
-  console.log(`Servidor rodando em http://localhost:${port}`);
+  console.log(`Servidor rodando na porta ${port}`);
 });
