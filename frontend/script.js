@@ -4,12 +4,14 @@
 // 1. CONFIGURAÇÃO E INICIALIZAÇÃO
 // ===================================================================
 
-// CORREÇÃO 1: Adicionado '/api' ao final da URL base
-const API_URL = 'https://pet-plus.onrender.com/api'; 
+// CORREÇÃO CRÍTICA: Usamos caminho relativo.
+// O navegador completará automaticamente (ex: https://seu-site.com/api)
+const API_URL = '/api'; 
+
 const SUPABASE_URL = 'https://ugffvmqwdmgikdjggmdz.supabase.co';
 const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InVnZmZ2bXF3ZG1naWtkamdnbWR6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjI5MDU4MzUsImV4cCI6MjA3ODQ4MTgzNX0.bWlrMvEUPYdiFYzlvieX73rCJg-FcVeCWIbHGg70QjQ';
 
-// Inicializa o cliente Supabase (evitando conflito de nomes)
+// Inicializa o cliente Supabase usando window.supabase para evitar conflitos
 const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
 // Estado Global da Aplicação
@@ -44,8 +46,8 @@ async function apiFetch(endpoint, options = {}) {
     }
 
     try {
-        // O endpoint já virá com a barra inicial (ex: /pets/adoption)
-        // API_URL já tem o /api, então fica: .../api/pets/adoption
+        // API_URL é '/api'. Endpoint é '/pets/adoption'.
+        // Resultado: '/api/pets/adoption' (funciona em qualquer domínio)
         const response = await fetch(`${API_URL}${endpoint}`, {
             ...options,
             headers,
@@ -80,6 +82,7 @@ function showMessage(elementId, message, type = 'success') {
 }
 
 function setButtonLoading(button, isLoading, originalText = '') {
+    if (!button) return;
     if (isLoading) {
         button.disabled = true;
         button.innerHTML = `<div class="spinner" style="width: 20px; height: 20px; border: 2px solid white; border-top-color: transparent; border-radius: 50%; animation: spin 1s linear infinite; margin: 0 auto;"></div>`;
@@ -89,7 +92,6 @@ function setButtonLoading(button, isLoading, originalText = '') {
     }
 }
 
-// Sanitização para evitar XSS
 function escapeHTML(str) {
     if (!str) return '';
     return String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
@@ -107,12 +109,13 @@ function debounce(func, delay = 400) {
     };
 }
 
-// Funções de formatação
 function formatDateTime(dateString) {
+    if (!dateString) return '';
     const date = new Date(dateString);
     return date.toLocaleString('pt-BR');
 }
 function formatDate(dateString) {
+    if (!dateString) return '';
     const date = new Date(dateString);
     return date.toLocaleDateString('pt-BR');
 }
@@ -154,9 +157,9 @@ function updateAuthButtons() {
     const userInfo = document.getElementById('userInfo');
 
     if (user) {
-        loginBtn.style.display = 'none';
-        logoutBtn.style.display = 'inline-block';
-        myPetsBtn.style.display = 'inline-block';
+        if (loginBtn) loginBtn.style.display = 'none';
+        if (logoutBtn) logoutBtn.style.display = 'inline-block';
+        if (myPetsBtn) myPetsBtn.style.display = 'inline-block';
         
         const avatarHtml = user.photoUrl 
             ? `<img src="${escapeAttr(user.photoUrl)}" class="nav-avatar">`
@@ -167,9 +170,9 @@ function updateAuthButtons() {
         userInfo.onclick = showProfileEditPage;
         userInfo.style.cursor = 'pointer';
     } else {
-        loginBtn.style.display = 'inline-block';
-        logoutBtn.style.display = 'none';
-        myPetsBtn.style.display = 'none';
+        if (loginBtn) loginBtn.style.display = 'inline-block';
+        if (logoutBtn) logoutBtn.style.display = 'none';
+        if (myPetsBtn) myPetsBtn.style.display = 'none';
         userInfo.innerHTML = `👋 Olá, <span id="userName"></span>`;
         userInfo.classList.remove('active');
         userInfo.onclick = null;
@@ -216,16 +219,14 @@ async function handleRegister(event) {
     setButtonLoading(btn, true);
 
     try {
-        // 1. Cria conta no Supabase Auth
         const { data, error } = await supabaseClient.auth.signUp({
             email, password, options: { data: { name, phone } }
         });
 
         if (error) throw error;
 
-        // 2. Cria perfil no Backend Local
         if (data.user) {
-            // CORREÇÃO 2: Usando apiFetch para garantir URL correta
+            // Chama o backend para criar o perfil no banco local
             await apiFetch('/auth/register', {
                 method: 'POST',
                 body: JSON.stringify({ name, email, phone, authId: data.user.id })
@@ -266,7 +267,6 @@ async function handleProfileUpdate(event) {
 
     try {
         const formData = new FormData(event.target);
-        // isFormData: true impede que apiFetch defina Content-Type JSON
         const data = await apiFetch('/auth/me', {
             method: 'PUT',
             body: formData,
@@ -290,10 +290,11 @@ async function handleProfileUpdate(event) {
 
 async function loadAdoptionPets() {
     const container = document.getElementById('adoptionPets');
+    if (!container) return;
+    
     container.innerHTML = '<div class="loading"><div class="spinner"></div></div>';
     
     try {
-        // Com a correção do API_URL, isso chamará /api/pets/adoption
         const response = await apiFetch('/pets/adoption');
         AppState.adoptionPets = response.data || [];
         renderPetList(AppState.adoptionPets, container, true);
@@ -305,6 +306,8 @@ async function loadAdoptionPets() {
 
 async function loadMyPets() {
     const container = document.getElementById('myPetsGrid');
+    if (!container) return;
+    
     container.innerHTML = '<div class="loading"><div class="spinner"></div></div>';
 
     try {
@@ -386,6 +389,7 @@ function showPetRegisterPage(petId = null) {
     const form = document.getElementById('petRegisterForm');
     const title = document.getElementById('petFormTitle');
     const hiddenId = document.getElementById('petEditId');
+    const deleteBtn = document.getElementById('deletePetButtonWrapper');
     form.reset();
 
     if (petId) {
@@ -393,6 +397,8 @@ function showPetRegisterPage(petId = null) {
         if (pet) {
             title.textContent = 'Editar Pet';
             hiddenId.value = pet.id;
+            if(deleteBtn) deleteBtn.style.display = 'block';
+            
             document.getElementById('petName').value = pet.name;
             document.getElementById('petType').value = pet.type;
             document.getElementById('petSpecies').value = pet.species;
@@ -405,6 +411,7 @@ function showPetRegisterPage(petId = null) {
     } else {
         title.textContent = 'Cadastrar Pet';
         hiddenId.value = '';
+        if(deleteBtn) deleteBtn.style.display = 'none';
     }
     showPage('pet-register');
 }
@@ -444,11 +451,13 @@ function closePetModal() {
 }
 
 // ===================================================================
-// 7. SERVIÇOS E BLOG (SIMPLIFICADO)
+// 7. SERVIÇOS E BLOG
 // ===================================================================
 
 async function loadServices() {
     const container = document.getElementById('servicesGrid');
+    if (!container) return;
+    
     container.innerHTML = '<div class="loading"><div class="spinner"></div></div>';
     try {
         const services = await apiFetch('/services');
@@ -474,6 +483,8 @@ async function loadServices() {
 
 async function loadBlogPosts() {
     const container = document.getElementById('blogFeed');
+    if (!container) return;
+    
     container.innerHTML = '<div class="loading"><div class="spinner"></div></div>';
     try {
         const posts = await apiFetch('/blog');
