@@ -1,6 +1,8 @@
+// frontend/script.js
+
 // 1. ESTADO DA APLICAÇÃO E INICIALIZAÇÃO DO SUPABASE
 
-const API_URL = 'https://petplus-backend.onrender.com'; // URL do seu backend no Render
+const API_URL = 'https://pet-plus.onrender.com'; // Confirme se esta URL é a do seu Render
 const SUPABASE_URL = 'https://ugffvmqwdmgikdjggmdz.supabase.co';
 const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InVnZmZ2bXF3ZG1naWtkamdnbWR6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjI5MDU4MzUsImV4cCI6MjA3ODQ4MTgzNX0.bWlrMvEUPYdiFYzlvieX73rCJg-FcVeCWIbHGg70QjQ';
 
@@ -9,33 +11,36 @@ if (SUPABASE_URL === 'URL_DO_SEU_PROJETO_SUPABASE' || SUPABASE_ANON_KEY === 'CHA
     alert('ERRO: Configure as variáveis SUPABASE_URL e SUPABASE_ANON_KEY no script.js');
 }
 
-const supabase = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+// CORREÇÃO AQUI: Usamos 'window.supabase' para acessar a biblioteca e 'supabaseClient' para a instância
+const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
-// BLOCO 6 (Tarefas 1 e 2): Gerenciamento de Estado Centralizado
-// Variáveis globais soltas foram removidas e agrupadas em um objeto AppState.
+// BLOCO 6: Gerenciamento de Estado Centralizado
 const AppState = {
     currentUser: null,
     adoptionPets: [],
     myPets: [],
     serviceProviders: [],
-    blogPosts: []
+    blogPosts: [],
+    pagination: {
+        adoption: { page: 1, hasMore: true, isLoading: false },
+        blog: { page: 1, hasMore: true, isLoading: false }
+    }
 };
 
-// 2. FUNÇÕES AUXILIARES DE API (Refatorada)
+// 2. FUNÇÕES AUXILIARES DE API
 
 async function apiFetch(endpoint, options = {}) {
     const headers = {
         ...options.headers,
     };
 
-    // Pega a sessão atual do Supabase
-    const { data: { session }, error } = await supabase.auth.getSession();
+    // CORREÇÃO: Usando supabaseClient
+    const { data: { session }, error } = await supabaseClient.auth.getSession();
 
     if (error) {
         console.error("Erro ao buscar sessão do Supabase:", error);
     }
 
-    // Se houver uma sessão, anexa o token JWT
     if (session) {
         headers['Authorization'] = `Bearer ${session.access_token}`;
     }
@@ -53,11 +58,10 @@ async function apiFetch(endpoint, options = {}) {
         if (!response.ok) {
             const errorData = await response.json();
             console.error('Erro na API:', errorData);
-            // BLOCO 6 (Tarefa 6): Padroniza a forma como erros são lançados
             throw new Error(errorData.message || `HTTP error! status: ${response.status}`);
         }
         
-        if (response.status === 204) { // No Content
+        if (response.status === 204) { 
             return null;
         }
 
@@ -73,7 +77,6 @@ async function apiFetch(endpoint, options = {}) {
 function showMessage(elementId, message, type = 'success') {
     const messageEl = document.getElementById(elementId);
     if (!messageEl) return;
-    // Usa textContent para prevenir XSS
     messageEl.textContent = message;
     messageEl.className = `message ${type} active`;
     setTimeout(() => {
@@ -81,11 +84,39 @@ function showMessage(elementId, message, type = 'success') {
     }, 5000);
 }
 
-// BLOCO 6 (Tarefa 5): Feedback visual para botões
+function updateLoadMoreButton(btnId, hasMore, callback) {
+    let btn = document.getElementById(btnId);
+    const container = document.getElementById('adoptionPets');
+    
+    if (!hasMore) {
+        if (btn) btn.style.display = 'none';
+        return;
+    }
+
+    if (!btn && container) {
+        const btnContainer = document.createElement('div');
+        btnContainer.style.textAlign = 'center';
+        btnContainer.style.marginTop = '30px';
+        btnContainer.style.width = '100%';
+        btnContainer.style.gridColumn = '1 / -1'; 
+        
+        btn = document.createElement('button');
+        btn.id = btnId;
+        btn.className = 'btn btn-secondary';
+        btn.textContent = 'Carregar Mais';
+        btn.style.width = 'auto';
+        btn.onclick = callback;
+        
+        btnContainer.appendChild(btn);
+        container.parentNode.appendChild(btnContainer);
+    } else if (btn) {
+        btn.style.display = 'inline-block';
+    }
+}
+
 function setButtonLoading(button, isLoading, originalText = '') {
     if (isLoading) {
         button.disabled = true;
-        // Adiciona spinner, mantendo o estilo do CSS
         button.innerHTML = `<div class="spinner" style="width: 20px; height: 20px; border-width: 2px; margin: 0 auto; border-top-color: white; border-left-color: white; border-right-color: white;"></div>`;
     } else {
         button.disabled = false;
@@ -93,7 +124,6 @@ function setButtonLoading(button, isLoading, originalText = '') {
     }
 }
 
-// BLOCO 6 (Tarefa 7): Funções de higienização de HTML para prevenir XSS
 function escapeHTML(str) {
     if (str === null || str === undefined) return '';
     return String(str)
@@ -106,11 +136,9 @@ function escapeHTML(str) {
 
 function escapeAttr(str) {
     if (str === null || str === undefined) return '';
-    // Escapa apenas o caractere que usamos para delimitar no onclick ('')
     return String(str).replace(/'/g, '&#39;');
 }
 
-// BLOCO 6 (Tarefa 3): Função Debounce
 function debounce(func, delay = 400) {
     let timer;
     return function(...args) {
@@ -121,16 +149,15 @@ function debounce(func, delay = 400) {
     };
 }
 
-
-// Funções utilitárias de formatação (inalteradas)
+// Funções de formatação
 function formatDate(dateString) {
     const date = new Date(dateString);
-    date.setMinutes(date.getMinutes() + date.getTimezoneOffset()); // Corrige fuso
+    date.setMinutes(date.getMinutes() + date.getTimezoneOffset()); 
     return date.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric' });
 }
 function formatDateTime(dateString) {
     const date = new Date(dateString);
-    date.setMinutes(date.getMinutes() + date.getTimezoneOffset()); // Corrige fuso
+    date.setMinutes(date.getMinutes() + date.getTimezoneOffset()); 
     return date.toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
 }
 function getSpeciesIcon(species) { return species === 'dog' ? '🐕' : '🐈'; }
@@ -146,7 +173,6 @@ function getGenderLabel(gender) {
     const labels = { male: 'Macho', female: 'Fêmea' };
     return labels[gender] || gender;
 }
-
 
 // 4. NAVEGAÇÃO E AUTENTICAÇÃO 
 
@@ -167,7 +193,6 @@ function showPage(pageId) {
         clickedBtn.classList.add('active');
     }
 
-    // Lógica de carregamento de página
     if (pageId === 'adoption') {
         loadAdoptionPets();
     } else if (pageId === 'my-pets') {
@@ -179,14 +204,12 @@ function showPage(pageId) {
     }
 }
 
-
 function updateAuthButtons() {
     const loginBtn = document.getElementById('loginBtn');
     const logoutBtn = document.getElementById('logoutBtn');
     const myPetsBtn = document.getElementById('myPetsBtn');
     const userInfo = document.getElementById('userInfo');
 
-    // BLOCO 6 (Tarefa 1): Lê do AppState
     if (AppState.currentUser) { 
         loginBtn.style.display = 'none';
         logoutBtn.style.display = 'inline-block';
@@ -196,15 +219,12 @@ function updateAuthButtons() {
         let avatarHtml = '';
 
         if (user.photoUrl) {
-            // BLOCO 6 (Tarefa 4): Lazy loading
-            // BLOCO 6 (Tarefa 7): Escapando atributos
             avatarHtml = `<img loading="lazy" src="${escapeAttr(user.photoUrl)}" alt="${escapeAttr(user.name)}" class="nav-avatar">`;
         } else {
             const letter = user.name ? escapeHTML(user.name).charAt(0).toUpperCase() : '👤';
             avatarHtml = `<div class="nav-avatar-default">${letter}</div>`;
         }
         
-        // BLOCO 6 (Tarefa 7): Higieniza o nome do usuário
         userInfo.innerHTML = `${avatarHtml} <span>Olá, ${escapeHTML(user.name)}</span>`;
         userInfo.classList.add('active');
         userInfo.onclick = showProfileEditPage;
@@ -215,7 +235,6 @@ function updateAuthButtons() {
         logoutBtn.style.display = 'none';
         myPetsBtn.style.display = 'none';
         
-        // Reseta para o padrão
         userInfo.innerHTML = `👋 Olá, <span id="userName"></span>`;
         userInfo.classList.remove('active');
         userInfo.onclick = null;
@@ -237,7 +256,8 @@ async function handleLogin(event) {
     setButtonLoading(loginButton, true);
 
     try {
-        const { error } = await supabase.auth.signInWithPassword({
+        // CORREÇÃO: Usando supabaseClient
+        const { error } = await supabaseClient.auth.signInWithPassword({
             email,
             password
         });
@@ -248,9 +268,10 @@ async function handleLogin(event) {
             } else {
                 showMessage('loginMessage', 'Email ou senha incorretos.', 'error');
             }
-            setButtonLoading(loginButton, false, 'Entrar'); // Reseta o botão no erro
+            setButtonLoading(loginButton, false, 'Entrar');
             return;
         }
+        
         showMessage('loginMessage', 'Login realizado com sucesso!', 'success');     
         setTimeout(() => showPage('landing'), 1500);
         document.getElementById('loginForm').reset();
@@ -258,7 +279,7 @@ async function handleLogin(event) {
 
     } catch (error) {
         showMessage('loginMessage', error.message, 'error');
-        setButtonLoading(loginButton, false, 'Entrar'); // Reseta o botão no erro
+        setButtonLoading(loginButton, false, 'Entrar');
     }
 }
 
@@ -290,64 +311,65 @@ async function handleRegister(event) {
     setButtonLoading(registerButton, true);
 
     try {
-        const { data, error } = await supabase.auth.signUp({
+        // CORREÇÃO: Usando supabaseClient
+        // 1. Cria usuário no Supabase Auth
+        const { data, error } = await supabaseClient.auth.signUp({
             email,
             password,
             options: {
-                data: {name, phone}
+                data: { name, phone }
             }
         });
 
         if (error) throw error;
-
+        
+        // 2. Cria perfil no Backend (Se o usuário foi criado)
         if (data.user) {
-                const apiBody = {
+             const apiBody = {
                 name: name,
                 email: email,
                 phone: phone,
-                authId: data.user.id,
+                authId: data.user.id 
             };
 
-                const response = await fetch(`${API_URL}/auth/register`, {
+            const response = await fetch(`${API_URL}/api/auth/register`, { // Corrigida URL da API
                 method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json'
-                },
+                headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(apiBody)
             });
 
             if (!response.ok) {
                 const errData = await response.json();
-                throw new Error(errData.message || 'Erro ao criar perfil no sistema.');
+                throw new Error(errData.message || 'Erro ao sincronizar perfil.');
             }
         }
-        
+
         showMessage('registerMessage', 'Cadastro realizado! Verifique seu e-mail para ativar sua conta.', 'success');
         document.getElementById('registerForm').reset();
         setButtonLoading(registerButton, false, 'Criar Conta');
         setTimeout(() => showPage('login'), 2000);
 
     } catch (error) {
+        console.error(error);
         showMessage('registerMessage', error.message, 'error');
-        setButtonLoading(registerButton, false, 'Criar Conta'); // Reseta no erro
+        setButtonLoading(registerButton, false, 'Criar Conta');
     }
 }
 
 async function logout() {
-    const { error } = await supabase.auth.signOut();
+    // CORREÇÃO: Usando supabaseClient
+    const { error } = await supabaseClient.auth.signOut();
     
     if (error) {
         console.error('Erro no logout:', error);
-        
         showMessage('loginMessage', 'Erro ao sair. Tente novamente.', 'error');
     }
     
-    showPage('landing');
+     showPage('landing');
     loadAdoptionPets();
     loadServices();
 }
 
-// Recuperação de Senha
 async function handlePasswordReset() {
     const email = document.getElementById('loginEmail').value.trim();
     if (!email) {
@@ -356,7 +378,8 @@ async function handlePasswordReset() {
     }
 
     try {
-        const { error } = await supabase.auth.resetPasswordForEmail(email, {
+        // CORREÇÃO: Usando supabaseClient
+        const { error } = await supabaseClient.auth.resetPasswordForEmail(email, {
             redirectTo: window.location.origin, 
         });
         if (error) throw error;
@@ -365,17 +388,14 @@ async function handlePasswordReset() {
         showMessage('loginMessage', error.message, 'error');
     }
 }
-
-// Função de proteção de rotas do Frontend Verifica se o usuário está logado no Supabase.
  
 async function checkAuth() {
-    const { data: { user } } = await supabase.auth.getUser();
+    // CORREÇÃO: Usando supabaseClient
+    const { data: { user } } = await supabaseClient.auth.getUser();
     if (!user) {
         showPage('login');
-        // Lança um erro para parar a execução da função que a chamou
         throw new Error('Usuário não autenticado.'); 
     }
-    // Se o e-mail não foi verificado
     if (!user.email_confirmed_at) {
         showPage('login');
         showMessage('loginMessage', 'Sua conta ainda não foi verificada. Verifique seu e-mail.', 'error');
@@ -387,7 +407,6 @@ async function checkAuth() {
 
 // 5. EDIÇÃO DE PERFIL
 function showProfileEditPage() {
-    // BLOCO 6 (Tarefa 1): Lê do AppState
     if (!AppState.currentUser) {
         showPage('login');
         return;
@@ -402,18 +421,16 @@ function showProfileEditPage() {
     showPage('profile-edit');
 }
 
-// Lida com o submit do formulário de atualização de perfil (PUT /me)
  async function handleProfileUpdate(event) {
     event.preventDefault();
     
     try {
-        await checkAuth(); // Garante que está logado
+        await checkAuth(); 
     } catch (error) {
         showMessage('profileMessage', 'Sessão expirada. Faça login novamente.', 'error');
         return;
     }
 
-    // BLOCO 6 (Tarefa 5): Feedback no botão
     const button = event.target.querySelector('button[type="submit"]');
     setButtonLoading(button, true);
 
@@ -421,7 +438,6 @@ function showProfileEditPage() {
     const formData = new FormData(form);
 
     try {
-        // Envia os dados para o NOSSO backend (Render)
         const data = await apiFetch('/auth/me', {
             method: 'PUT',
             body: formData,
@@ -430,15 +446,14 @@ function showProfileEditPage() {
 
         showMessage('profileMessage', data.message, 'success');
         
-        // BLOCO 6 (Tarefa 1): Atualiza o AppState
         AppState.currentUser = data.user;
-        updateAuthButtons(); // Re-renderiza a navbar com novos dados
+        updateAuthButtons(); 
         setButtonLoading(button, false, 'Salvar Alterações');
         setTimeout(() => showPage('landing'), 2000);
 
     } catch (error) {
         showMessage('profileMessage', error.message, 'error');
-        setButtonLoading(button, false, 'Salvar Alterações'); // Reseta no erro
+        setButtonLoading(button, false, 'Salvar Alterações'); 
     }
 }
 
@@ -467,10 +482,8 @@ async function showPetRegisterPage(petId = null) {
         hiddenId.value = '';
         deleteButtonWrapper.style.display = 'none';
     } else {
-        // BLOCO 6 (Tarefa 1): Busca o pet em *ambos* os arrays de estado
         const pet = AppState.myPets.find(p => p.id === petId) || AppState.adoptionPets.find(p => p.id === petId);
         
-        // BLOCO 6 (Tarefa 1): Compara com o currentUser no AppState
         if (pet && pet.ownerId == AppState.currentUser.id) { 
             title.textContent = 'Atualizar Pet';
             button.textContent = 'Atualizar Pet';
@@ -486,7 +499,6 @@ async function showPetRegisterPage(petId = null) {
             document.getElementById('petGender').value = pet.gender;
             document.getElementById('petDescription').value = pet.description;
         } else {
-            // BLOCO 6 (Tarefa 6): Substitui alert
             showMessage('myPetsMessage', "Pet não encontrado ou você não tem permissão para editá-lo.", 'error');
             return;
         }
@@ -516,14 +528,11 @@ async function handlePetRegistration(event) {
         return;
     }
 
-    // BLOCO 6 (Tarefa 5): Feedback no botão
     const button = form.querySelector('button[type="submit"]');
     const buttonText = petId ? 'Atualizar Pet' : 'Cadastrar Pet';
     setButtonLoading(button, true, buttonText);
 
-   
     if (petId) {
-        // BLOCO 6 (Tarefa 1): Busca o pet no AppState
         const pet = AppState.myPets.find(p => p.id === parseInt(petId)) || AppState.adoptionPets.find(p => p.id === parseInt(petId));
         if (pet && pet.photoUrl) {
             formData.append('photoUrl', pet.photoUrl); 
@@ -532,11 +541,10 @@ async function handlePetRegistration(event) {
 
     try {
         let responseData;
-        
         const endpoint = petId ? `/pets/${petId}` : '/pets';
         const method = petId ? 'PUT' : 'POST';
 
-                responseData = await apiFetch(endpoint, {
+        responseData = await apiFetch(endpoint, {
             method: method,
             body: formData,
             isFormData: true 
@@ -549,46 +557,70 @@ async function handlePetRegistration(event) {
         document.getElementById('petEditId').value = '';
         setButtonLoading(button, false, buttonText);
         
-      
         setTimeout(() => {
             if (responseData.type === 'adoption') {
-                showPage('adoption'); // Irá recarregar os pets
+                showPage('adoption'); 
             } else {
-                showPage('my-pets'); // Irá recarregar os pets
+                showPage('my-pets'); 
             }
         }, 1500);
 
     } catch (error) {
         showMessage('petRegisterMessage', `Erro: ${error.message}`, 'error');
-        setButtonLoading(button, false, buttonText); // Reseta no erro
+        setButtonLoading(button, false, buttonText);
     }
 }
 
-async function loadAdoptionPets() {
+async function loadAdoptionPets(resetPage = false) {
     const container = document.getElementById('adoptionPets');
-    // BLOCO 6 (Tarefa 5): Feedback visual de loading
-    container.innerHTML = `<div class="loading"><div class="spinner"></div></div>`;
+    const loadMoreBtn = document.getElementById('loadMorePetsBtn');
+
+    if (resetPage) {
+        AppState.pagination.adoption.page = 1;
+        AppState.pagination.adoption.hasMore = true;
+        AppState.adoptionPets = [];
+        container.innerHTML = ''; 
+    }
+
+    if (!AppState.pagination.adoption.hasMore || AppState.pagination.adoption.isLoading) return;
+
+    AppState.pagination.adoption.isLoading = true;
     
+    if (resetPage) container.innerHTML = `<div class="loading"><div class="spinner"></div></div>`;
+    if (loadMoreBtn) setButtonLoading(loadMoreBtn, true);
+
     try {
-     
         const filters = getPetFilters();
-        const adoptionPets = await apiFetch(`/pets/adoption?${filters}`);
+        const pageParams = `&page=${AppState.pagination.adoption.page}&limit=9`; 
         
-        // BLOCO 6 (Tarefa 1): Armazena no AppState
-        AppState.adoptionPets = adoptionPets; 
+        const response = await apiFetch(`/pets/adoption?${filters}${pageParams}`);
+        const newPets = response.data || [];
         
-        if (adoptionPets.length === 0) {
+        AppState.adoptionPets = [...AppState.adoptionPets, ...newPets];
+        
+        if (resetPage) container.innerHTML = '';
+
+        if (newPets.length === 0 && AppState.pagination.adoption.page === 1) {
             container.innerHTML = `
                 <div class="empty-state">
                     <div class="empty-state-icon">🐾</div>
-                    <h3>Nenhum pet disponível</h3>
-                    <p>No momento, não há pets para adoção. Volte em breve!</p>
+                    <h3>Nenhum pet encontrado</h3>
+                    <p>Tente ajustar os filtros de busca.</p>
                 </div>`;
-            return;
+        } else {
+            displayPets(newPets, container, true, true);
         }
-        displayPets(adoptionPets, container, true);
+
+        AppState.pagination.adoption.page++;
+        AppState.pagination.adoption.hasMore = AppState.pagination.adoption.page <= response.totalPages;
+        updateLoadMoreButton('loadMorePetsBtn', AppState.pagination.adoption.hasMore, () => loadAdoptionPets(false));
+
     } catch (error) {
-        container.innerHTML = `<div class="empty-state"><h3>Erro ao carregar pets. Tente novamente.</h3></div>`;
+        console.error(error);
+        if (resetPage) container.innerHTML = `<div class="empty-state"><h3>Erro ao carregar pets.</h3></div>`;
+    } finally {
+        AppState.pagination.adoption.isLoading = false;
+        if (loadMoreBtn) setButtonLoading(loadMoreBtn, false, 'Carregar Mais');
     }
 }
 
@@ -597,7 +629,7 @@ async function loadMyPets() {
     try {
         await checkAuth();
     } catch (error) {
-        return; // Para a execução se não estiver logado
+        return; 
     }
 
     const container = document.getElementById('myPetsGrid');
@@ -605,7 +637,6 @@ async function loadMyPets() {
 
     try {
         const myPets = await apiFetch('/pets/mypets'); 
-        // BLOCO 6 (Tarefa 1): Armazena no AppState
         AppState.myPets = myPets; 
 
         if (myPets.length === 0) {
@@ -622,8 +653,6 @@ async function loadMyPets() {
         }
         displayPets(myPets, container, false);
     } catch (error) {
-        // BLOCO 6 (Tarefa 6): Mostra erro padronizado
-        // BLOCO 6 (Tarefa 7): Higieniza a mensagem de erro
         container.innerHTML = `<div class="empty-state"><h3>Erro ao carregar seus pets. Tente novamente.</h3><p>${escapeHTML(error.message)}</p></div>`;
     }
 }
@@ -641,39 +670,31 @@ function getStatusIndicator(pet) {
 }
 
 
-function displayPets(petsToShow, container, isAdoptionView) {
-    // BLOCO 6 (Tarefa 7): Higieniza toda a renderização
-    container.innerHTML = petsToShow.map(pet => {
+function displayPets(petsToShow, container, isAdoptionView, shouldAppend = false) {
+    const htmlContent = petsToShow.map(pet => {
         const ownerName = pet.ownerName || 'Dono';
         const upcomingVaccines = getUpcomingVaccines(pet);
         
-        // BLOCO 6 (Tarefa 4): Lazy loading
-        const petImage = pet.photoUrl ? `<img loading="lazy" src="${escapeAttr(pet.photoUrl)}" alt="Foto de ${escapeAttr(pet.name)}">` : getSpeciesIcon(pet.species);
+        const petImage = pet.photoUrl 
+            ? `<img loading="lazy" src="${escapeAttr(pet.photoUrl)}" alt="Foto de ${escapeAttr(pet.name)}, um ${escapeAttr(pet.species)}">` 
+            : getSpeciesIcon(pet.species);
         
         let actionButtons = '';
         if (isAdoptionView) {
-            actionButtons = `<button class="btn btn-small" onclick="openPetProfile(${pet.id})">Ver Perfil</button>`;
-            // BLOCO 6 (Tarefa 1): Checa AppState.currentUser
+            actionButtons = `<button class="btn btn-small" onclick="openPetProfile(${pet.id})" aria-label="Ver perfil completo de ${escapeHTML(pet.name)}">Ver Perfil</button>`;
             if (AppState.currentUser) {
-                // BLOCO 6 (Tarefa 7): Escapa atributos do onclick
-                actionButtons += ` <button class="btn btn-small" onclick="showContact(${pet.ownerId}, '${escapeAttr(ownerName)}', '${escapeAttr(pet.ownerPhone)}', '${escapeAttr(pet.ownerEmail)}')" style="background: #38a169;">Contato</button>`;
+                actionButtons += ` <button class="btn btn-small" onclick="showContact(${pet.ownerId}, '${escapeAttr(ownerName)}', '${escapeAttr(pet.ownerPhone)}', '${escapeAttr(pet.ownerEmail)}')" style="background: #38a169;" aria-label="Ver contato do dono">Contato</button>`;
             } else {
                 actionButtons += ` <button class="btn btn-small" onclick="showPage('login')" style="background: #a0aec0;">Logar para Contato</button>`;
             }
         } else { 
-            actionButtons = `<button class="btn btn-small" onclick="openPetProfile(${pet.id})">Ver Perfil</button>`;
-            
-          
-            // BLOCO 6 (Tarefa 1): Checa AppState.currentUser
+            actionButtons = `<button class="btn btn-small" onclick="openPetProfile(${pet.id})" aria-label="Ver perfil de ${escapeHTML(pet.name)}">Ver Perfil</button>`;
             if (AppState.currentUser && pet.ownerId == AppState.currentUser.id) {
-                 actionButtons += `<button class="btn btn-small" onclick="showPetRegisterPage(${pet.id})" style="background: #4299e1;">Editar</button>`;
+                 actionButtons += `<button class="btn btn-small" onclick="showPetRegisterPage(${pet.id})" style="background: #4299e1;" aria-label="Editar ${escapeHTML(pet.name)}">Editar</button>`;
             }
-
             if (pet.type === 'personal') {
-                actionButtons += `<button class="btn btn-small" onclick="openVaccinationModal(${pet.id})" style="background: #ed8936;">+ Vacina</button>`;
+                actionButtons += `<button class="btn btn-small" onclick="openVaccinationModal(${pet.id})" style="background: #ed8936;" aria-label="Adicionar vacina para ${escapeHTML(pet.name)}">+ Vacina</button>`;
             } else if (pet.type === 'adoption' && pet.status === 'available') {
-               
-                // BLOCO 6 (Tarefa 1): Checa AppState.currentUser
                 if (AppState.currentUser && pet.ownerId == AppState.currentUser.id) {
                     actionButtons += `<button class="btn btn-small" onclick="markAsAdopted(${pet.id})" style="background: #38a169;">Marcar como Adotado</button>`;
                 }
@@ -681,12 +702,12 @@ function displayPets(petsToShow, container, isAdoptionView) {
         }
 
         return `
-            <div class="pet-card">
-                <div class="pet-image">
+            <div class="pet-card" role="article" aria-labelledby="pet-name-${pet.id}">
+                <div class="pet-image" role="img" aria-label="Foto do pet">
                     ${petImage}
                 </div>
                 <div class="pet-info">
-                    <div class="pet-name">${escapeHTML(pet.name)}</div>
+                    <div class="pet-name" id="pet-name-${pet.id}">${escapeHTML(pet.name)}</div>
                     <div class="pet-details">
                         <div class="pet-detail-item">
                             <span>Espécie:</span>
@@ -703,7 +724,7 @@ function displayPets(petsToShow, container, isAdoptionView) {
                     </div>
                     <div class="pet-description">${escapeHTML(pet.description)}</div>
                     ${upcomingVaccines.length > 0 ? 
-                        `<div style="background: #fff8e1; padding: 10px; border-radius: 8px; margin-bottom: 15px; border-left: 3px solid #ed8936;">
+                        `<div role="alert" style="background: #fff8e1; padding: 10px; border-radius: 8px; margin-bottom: 15px; border-left: 3px solid #ed8936;">
                             <small style="color: #ed8936; font-weight: 600;">⚠️ ${upcomingVaccines.length} vacina(s) próxima(s) do vencimento</small>
                         </div>` : ''
                     }
@@ -713,6 +734,12 @@ function displayPets(petsToShow, container, isAdoptionView) {
             </div>
         `;
     }).join('');
+
+    if (shouldAppend) {
+        container.insertAdjacentHTML('beforeend', htmlContent);
+    } else {
+        container.innerHTML = htmlContent;
+    }
 }
 
 
@@ -748,11 +775,9 @@ async function markAsAdopted(petId) {
     if (confirm("Você tem certeza que deseja marcar este pet como adotado? Esta ação removerá o pet da lista pública de adoção.")) {
         try {
             await apiFetch(`/pets/${petId}/adopt`, { method: 'PUT' });
-            // BLOCO 6 (Tarefa 6): Feedback de sucesso
             showMessage('myPetsMessage', 'Pet marcado como adotado com sucesso!', 'success');
-            loadMyPets(); // Recarrega a lista
+            loadMyPets(); 
         } catch (error) {
-            // BLOCO 6 (Tarefa 6): Substitui alert
             showMessage('myPetsMessage', `Erro: ${error.message}`, 'error');
         }
     }
@@ -790,7 +815,6 @@ async function loadServices() {
     
     container.innerHTML = `<div class="loading"><div class="spinner"></div></div>`;
     
-   
     const searchTerm = document.getElementById('serviceSearchFilter')?.value || '';
     const category = document.getElementById('serviceCategoryFilter')?.value || '';
     
@@ -800,7 +824,6 @@ async function loadServices() {
 
     try {
         const services = await apiFetch(`/services?${params.toString()}`);
-        // BLOCO 6 (Tarefa 1): Armazena no AppState
         AppState.serviceProviders = services; 
         displayServiceProviders(services, container);
     } catch (error) {
@@ -820,13 +843,11 @@ function displayServiceProviders(providersToShow, container) {
                 <p>Tente ajustar os filtros de busca.</p>
             </div>`;
     } else {
-        // BLOCO 6 (Tarefa 7): Higieniza toda a renderização
         container.innerHTML = providersToShow.map(provider => {
             
             let providerDetails = `<p><strong>Descrição:</strong> ${escapeHTML(provider.description)}</p>`;
             let providerActionsContent = '';
             
-            // O backend retorna "Faça login para ver" se o usuário não estiver logado
             const isLoggedIn = (provider.phone !== "Faça login para ver");
 
             if (isLoggedIn) {
@@ -836,16 +857,13 @@ function displayServiceProviders(providersToShow, container) {
                         📞 Ligar (${escapeHTML(provider.phone)})
                     </a>`;
                 
-                // Botão de API de Mapas
                 if (provider.latitude && provider.longitude) {
-                    // JSON.stringify é seguro e escapa dados para uso em JS
                     providerActionsContent += `
                         <button class="btn btn-small" onclick='showServiceMapInModal(${JSON.stringify(provider)})' style="background: #3182ce;">
                             🗺️ Ver no Mapa
                         </button>`;
                 }
                 
-            // BLOCO 6 (Tarefa 1): Checa AppState.currentUser
             if (AppState.currentUser && AppState.currentUser.id == provider.ownerId) {
                     providerActionsContent += `
                         <button class="btn btn-small" onclick="showServiceRegisterPage(${provider.id})" style="background: #4299e1;">
@@ -907,11 +925,8 @@ async function showServiceRegisterPage(serviceId = null) {
         
         getDeviceLocationForServiceForm();
     } else {
-        // BLOCO 6 (Tarefa 1): Lê do AppState
         const service = AppState.serviceProviders.find(s => s.id === serviceId);
         
-        
-           // BLOCO 6 (Tarefa 1): Checa AppState.currentUser
            if (service && service.ownerId == AppState.currentUser.id) {
             title.textContent = 'Atualizar Serviço';
             button.textContent = 'Atualizar Serviço';
@@ -925,7 +940,6 @@ async function showServiceRegisterPage(serviceId = null) {
             document.getElementById('serviceAddress').value = service.address;
             document.getElementById('serviceDescription').value = service.description;
         } else {
-            // BLOCO 6 (Tarefa 6): Substitui alert
             showMessage('serviceRegisterMessage', "Serviço não encontrado ou você não tem permissão para editá-lo.", 'error');
             return;
         }
@@ -956,7 +970,6 @@ async function handleServiceRegistration(event) {
         return;
     }
 
-    // BLOCO 6 (Tarefa 5): Feedback no botão
     const button = event.target.querySelector('button[type="submit"]');
     const buttonText = serviceId ? 'Atualizar Serviço' : 'Cadastrar Serviço';
     setButtonLoading(button, true, buttonText);
@@ -983,7 +996,7 @@ async function handleServiceRegistration(event) {
 
     } catch (error) {
          showMessage('serviceRegisterMessage', `Erro: ${error.message}`, 'error');
-         setButtonLoading(button, false, buttonText); // Reseta no erro
+         setButtonLoading(button, false, buttonText); 
     }
 }
 
@@ -1015,8 +1028,6 @@ async function handleVaccination(event) {
     try {
         await checkAuth();
     } catch (error) {
-        // BLOCO 6 (Tarefa 6): Substitui alert
-        // Tenta encontrar um 'vaccinationMessage' no modal
         showMessage('vaccinationMessage', 'Sessão expirada. Faça login novamente para adicionar vacinas.', 'error');
         return;
     }
@@ -1029,7 +1040,6 @@ async function handleVaccination(event) {
     const notes = document.getElementById('vaccineNotes').value.trim();
 
     if (!name || !date) {
-        // BLOCO 6 (Tarefa 6): Substitui alert
         showMessage('vaccinationMessage', 'Por favor, preencha os campos obrigatórios (Nome da Vacina e Data).', 'error');
         return;
     }
@@ -1042,7 +1052,6 @@ async function handleVaccination(event) {
         notes: notes || null
     };
 
-    // BLOCO 6 (Tarefa 5): Feedback no botão
     const button = event.target.querySelector('button[type="submit"]');
     setButtonLoading(button, true, 'Adicionar Vacina');
 
@@ -1053,28 +1062,24 @@ async function handleVaccination(event) {
             body: JSON.stringify(vaccineData)
         });
         
-      
-        // BLOCO 6 (Tarefa 1): Atualiza o pet correto no AppState
         let pet = AppState.myPets.find(p => p.id === petId);
         if (!pet) {
             pet = AppState.adoptionPets.find(p => p.id === petId);
         }
         if (pet) {
-            // Adiciona no início da lista
             pet.vaccines.unshift(newVaccine);
         }
         
         setButtonLoading(button, false, 'Adicionar Vacina');
         closeVaccinationModal();
-        openPetProfile(petId); // Re-renderiza o modal do pet com a nova vacina
+        openPetProfile(petId); 
 
         if (document.getElementById('my-pets').classList.contains('active')) {
             loadMyPets(); 
         }
     } catch (error) {
-        // BLOCO 6 (Tarefa 6): Substitui alert
         showMessage('vaccinationMessage', `Erro ao adicionar vacina: ${error.message}`, 'error');
-        setButtonLoading(button, false, 'Adicionar Vacina'); // Reseta no erro
+        setButtonLoading(button, false, 'Adicionar Vacina'); 
     }
 }
 
@@ -1135,23 +1140,15 @@ function closeVaccinationModal() {
 // 9. GERENCIAMENTO DE MODAIS
 
 function openPetProfile(petId) {
-    // BLOCO 6 (Tarefa 1): Busca o pet em *ambos* os arrays de estado
     const pet = AppState.adoptionPets.find(p => p.id === petId) || AppState.myPets.find(p => p.id === petId);
     if (!pet) return;
 
-   
-   // BLOCO 6 (Tarefa 1): Checa AppState.currentUser
    const isOwner = AppState.currentUser && (AppState.currentUser.id == pet.ownerId);
-   // BLOCO 6 (Tarefa 4): Lazy loading
-   // BLOCO 6 (Tarefa 7): Higienização
    const petImage = pet.photoUrl ? `<img loading="lazy" src="${escapeAttr(pet.photoUrl)}" alt="Foto de ${escapeAttr(pet.name)}" style="width: 100%; height: 100%; object-fit: cover;">` : getSpeciesIcon(pet.species);
 
     let adoptionButton = '';
-    // Se for pet de adoção, disponível, e o usuário NÃO for o dono
     if (pet.type === 'adoption' && pet.status === 'available' && !isOwner) {
-        // BLOCO 6 (Tarefa 1): Checa AppState.currentUser
         if (AppState.currentUser) {
-            // BLOCO 6 (Tarefa 7): Escapa atributos do onclick
             adoptionButton = `
                 <div style="text-align: center; margin-top: 25px;">
                     <button class="btn" onclick="showContact(${pet.ownerId}, '${escapeAttr(pet.ownerName)}', '${escapeAttr(pet.ownerPhone)}', '${escapeAttr(pet.ownerEmail)}')" style="background: #38a169; width: auto; padding: 15px 30px;">
@@ -1166,7 +1163,6 @@ function openPetProfile(petId) {
                     </button>
                 </div>`;
         }
-    // Se o usuário FOR o dono e o pet estiver para adoção
     } else if (isOwner && pet.type === 'adoption' && pet.status === 'available') {
          adoptionButton = `
             <div style="text-align: center; margin-top: 25px;">
@@ -1176,7 +1172,6 @@ function openPetProfile(petId) {
             </div>`;
     }
 
-    // BLOCO 6 (Tarefa 7): Higieniza toda a renderização do innerHTML
     document.getElementById('petModalContent').innerHTML = `
         <div style="text-align: center; margin-bottom: 30px;">
             <div style="font-size: 5rem; margin-bottom: 15px; width: 150px; height: 150px; border-radius: 50%; overflow: hidden; margin: 0 auto; background: #f0f0f0; display: flex; align-items: center; justify-content: center;">
@@ -1245,26 +1240,7 @@ function closePetModal() {
 }
 
 
-async function openVaccinationModal(petId) {
-    try {
-        await checkAuth(); 
-    } catch (error) {
-        return;
-    }
-    
-    document.getElementById('vaccinePetId').value = petId;
-    document.getElementById('vaccinationForm').reset();
-    document.getElementById('vaccinationModal').classList.add('active');
-}
-
-
-function closeVaccinationModal() {
-    document.getElementById('vaccinationModal').classList.remove('active');
-}
-
 function showContact(ownerId, ownerName, ownerPhone, ownerEmail) {
-
-    // BLOCO 6 (Tarefa 7): Higieniza os dados de contato
     document.getElementById('contactModalContent').innerHTML = `
         <div style="text-align: center; margin-bottom: 30px;">
             <div style="font-size: 4rem; margin-bottom: 15px;">👤</div>
@@ -1307,8 +1283,6 @@ function toggleNewPostForm(show) {
         postContainer.scrollIntoView({ behavior: 'smooth', block: 'center' });
     } else {
         postContainer.style.display = 'none';
-        // Mostra o botão "+ Escrever Novo Post" apenas se o usuário estiver logado
-        // BLOCO 6 (Tarefa 1): Checa AppState.currentUser
         if (AppState.currentUser) {
             blogActions.style.display = 'block';
         }
@@ -1320,11 +1294,8 @@ async function loadBlogPosts() {
     const blogActions = document.getElementById('blog-actions');
     const feedContainer = document.getElementById('blogFeed');
 
-    // Controla a visibilidade dos botões de ação do blog
-    // BLOCO 6 (Tarefa 1): Checa AppState.currentUser
     if (AppState.currentUser) {
         blogActions.style.display = 'block';
-        // Esconde o formulário se não estiver em modo de edição
         if (!document.getElementById('postEditId').value) {
              postContainer.style.display = 'none';
         }
@@ -1337,7 +1308,6 @@ async function loadBlogPosts() {
     
     try {
         const posts = await apiFetch('/blog'); 
-        // BLOCO 6 (Tarefa 1): Armazena no AppState
         AppState.blogPosts = posts; 
         displayBlogPosts(posts, feedContainer);
     } catch (error) {
@@ -1356,13 +1326,10 @@ function displayBlogPosts(posts, container) {
         return;
     }
 
-    // BLOCO 6 (Tarefa 7): Higieniza toda a renderização
     container.innerHTML = posts.map(post => {
         const ownerName = post.ownerName || 'Usuário';
-        // BLOCO 6 (Tarefa 1): Checa AppState.currentUser
         const isOwner = AppState.currentUser && (AppState.currentUser.id == post.ownerId);
         
-        // BLOCO 6 (Tarefa 4): Lazy loading
         const postImageHTML = post.photoUrl 
             ? `<img loading="lazy" src="${escapeAttr(post.photoUrl)}" alt="Foto do post" class="post-image">` 
             : '';
@@ -1377,20 +1344,17 @@ function displayBlogPosts(posts, container) {
             
         let avatarHtml = '';
         if (post.ownerPhotoUrl) {
-            // BLOCO 6 (Tarefa 4): Lazy loading
             avatarHtml = `<img loading="lazy" src="${escapeAttr(post.ownerPhotoUrl)}" alt="${escapeAttr(ownerName)}" class="post-author-avatar-img">`;
         } else {
             const avatarLetter = escapeHTML(ownerName).charAt(0).toUpperCase();
             avatarHtml = `${avatarLetter}`;
         }
 
-        // BLOCO 6 (Tarefa 1): Checa AppState.currentUser
         const userHasLiked = AppState.currentUser && post.likes.includes(AppState.currentUser.id);
         const likeBtnActive = userHasLiked ? 'active' : '';
         const likeCount = post.likes.length;
         const likeText = likeCount === 1 ? 'curtida' : 'curtidas';
 
-        // Lógica de Comentários (Higienizada)
         const commentsHTML = post.comments.map(comment => `
             <div class="comment-item">
                 <strong class="comment-author">${escapeHTML(comment.ownerName || 'Usuário')}</strong>
@@ -1398,7 +1362,6 @@ function displayBlogPosts(posts, container) {
             </div>
         `).join('');
 
-        // BLOCO 6 (Tarefa 1): Checa AppState.currentUser
         const commentFormHTML = AppState.currentUser ? `
             <form class="post-comment-form" onsubmit="handleCommentSubmit(event, ${post.id})">
                 <input type="text" class="comment-input" placeholder="Escreva um comentário..." required>
@@ -1445,7 +1408,7 @@ async function showPostForm(postId = null) {
     try {
         await checkAuth(); 
     } catch (error) {
-        return; // Para a execução se não estiver logado
+        return; 
     }
 
     const form = document.getElementById('postForm');
@@ -1468,9 +1431,7 @@ async function showPostForm(postId = null) {
         deleteButtonWrapper.style.display = 'none';
         getDeviceLocationForPostForm();
     } else {
-        // BLOCO 6 (Tarefa 1): Lê do AppState
         const post = AppState.blogPosts.find(p => p.id === postId);
-        // BLOCO 6 (Tarefa 1): Checa AppState.currentUser
         if (post && post.ownerId == AppState.currentUser.id) {
             title.textContent = 'Editar Post';
             button.textContent = 'Atualizar';
@@ -1483,7 +1444,6 @@ async function showPostForm(postId = null) {
             document.getElementById('new-post-container').scrollIntoView({ behavior: 'smooth', block: 'center' });
 
         } else {
-            // BLOCO 6 (Tarefa 6): Substitui alert
             showMessage('postMessage', "Post não encontrado ou você não tem permissão para editá-lo.", 'error');
             toggleNewPostForm(false);
             return;
@@ -1510,17 +1470,12 @@ async function handlePostSubmit(event) {
         return;
     }
 
-    // BLOCO 6 (Tarefa 5): Feedback no botão
     const button = form.querySelector('button[type="submit"]');
     const buttonText = postId ? 'Atualizar' : 'Publicar';
     setButtonLoading(button, true, buttonText);
     
-    // Lógica para manter a foto antiga ao editar (se nenhuma nova for enviada)
     if (postId) {
-        // BLOCO 6 (Tarefa 1): Lê do AppState
         const post = AppState.blogPosts.find(p => p.id === parseInt(postId));
-        // Se não houver arquivo novo (req.file) E o post antigo tiver foto,
-        // envia a URL antiga para o backend não apagar.
         if (!formData.get('photo').size && post && post.photoUrl) {
             formData.append('photoUrl', post.photoUrl);
         }
@@ -1544,11 +1499,10 @@ async function handlePostSubmit(event) {
         loadBlogPosts();
     } catch (error) {
         showMessage('postMessage', `Erro: ${error.message}`, 'error');
-        setButtonLoading(button, false, buttonText); // Reseta no erro
+        setButtonLoading(button, false, buttonText); 
     }
 }
 
-//(Protegida) Deleta um post a partir do formulário de edição
  async function deletePostFromForm() {
     try {
         await checkAuth(); 
@@ -1563,54 +1517,43 @@ async function handlePostSubmit(event) {
         try {
             await apiFetch(`/blog/${postId}`, { method: 'DELETE' });
             toggleNewPostForm(false);
-            loadBlogPosts(); // Recarrega o feed
+            loadBlogPosts(); 
         } catch (error) {
-            // BLOCO 6 (Tarefa 6): Substitui alert
             showMessage('postMessage', `Erro ao excluir: ${error.message}`, 'error');
         }
     }
 }
 
-// (Protegida) Adiciona ou remove um like de um post
 async function toggleLike(postId) {
     try {
         await checkAuth(); 
     } catch (error) {
-        // BLOCO 6 (Tarefa 6): Substitui alert por showMessage
-        // Tenta mostrar a mensagem no feed do blog
         showMessage('postMessage', 'Você precisa estar logado para curtir.', 'error');
         return; 
     }
 
     try {
-        // A API cuida da lógica de adicionar/remover
         await apiFetch(`/blog/${postId}/like`, { method: 'POST' });
 
-        // BLOCO 6 (Tarefa 1): Atualiza o AppState
         const post = AppState.blogPosts.find(p => p.id === postId);
         const likeButton = document.querySelector(`#post-${postId} .like-btn`);
         const likeCountSpan = document.querySelector(`#post-${postId} .like-count`);
         const myUserId = AppState.currentUser.id;
 
         if (post.likes.includes(myUserId)) {
-            // Remove o like localmente
             post.likes = post.likes.filter(id => id !== myUserId);
             likeButton.classList.remove('active');
         } else {
-            // Adiciona o like localmente
             post.likes.push(myUserId);
             likeButton.classList.add('active');
         }
 
         const likeCount = post.likes.length;
         const likeText = likeCount === 1 ? 'curtida' : 'curtidas';
-        // BLOCO 6 (Tarefa 7): Usa textContent
         likeCountSpan.textContent = `${likeCount} ${likeText}`;
         
     } catch (error) {
-        // BLOCO 6 (Tarefa 6): Substitui alert
         showMessage('postMessage', `Erro ao curtir: ${error.message}`, 'error');
-        // Se der erro, recarrega tudo para garantir consistência
         loadBlogPosts();
     }
 }
@@ -1621,7 +1564,6 @@ async function handleCommentSubmit(event, postId) {
     try {
         await checkAuth(); 
     } catch (error) {
-        // BLOCO 6 (Tarefa 6): Substitui alert
         showMessage('postMessage', 'Você precisa estar logado para comentar.', 'error');
         return; 
     }
@@ -1632,7 +1574,6 @@ async function handleCommentSubmit(event, postId) {
 
     if (!content) return;
 
-    // BLOCO 6 (Tarefa 5): Feedback no botão de comentário
     const button = form.querySelector('.comment-submit-btn');
     setButtonLoading(button, true, 'Enviar');
 
@@ -1646,11 +1587,9 @@ async function handleCommentSubmit(event, postId) {
         setButtonLoading(button, false, 'Enviar');
 
         
-        // BLOCO 6 (Tarefa 1): Atualiza o AppState
         const post = AppState.blogPosts.find(p => p.id === postId);
         post.comments.push(newComment); 
 
-        // BLOCO 6 (Tarefa 7): Higieniza o novo comentário
         const commentsList = document.querySelector(`#post-${postId} .post-comments-list`);
         const newCommentHTML = `
             <div class="comment-item">
@@ -1659,25 +1598,21 @@ async function handleCommentSubmit(event, postId) {
             </div>
         `;
         
-        // Remove o texto "Seja o primeiro a comentar" se for o primeiro comentário
         if (commentsList.querySelector('p')) {
             commentsList.innerHTML = newCommentHTML;
         } else {
             commentsList.innerHTML += newCommentHTML;
         }
-        commentsList.scrollTop = commentsList.scrollHeight; // Rola para o novo comentário
+        commentsList.scrollTop = commentsList.scrollHeight; 
 
     } catch (error) {
-        // BLOCO 6 (Tarefa 6): Substitui alert
         showMessage('postMessage', `Erro ao comentar: ${error.message}`, 'error');
-        setButtonLoading(button, false, 'Enviar'); // Reseta no erro
+        setButtonLoading(button, false, 'Enviar'); 
     }
 }
 
 
 // 11. INTEGRAÇÃO APIs UNIDADE IV (Geolocalização e Mapas)
-
-//  API de Geolocalização (Sensor). Tenta obter a localização e preencher o formulário de POST.
 
 function getDeviceLocationForPostForm() {
     const locationInput = document.getElementById('postLocation');
@@ -1689,7 +1624,6 @@ function getDeviceLocationForPostForm() {
             async (position) => {
                 const lat = position.coords.latitude;
                 const lon = position.coords.longitude;
-                // Usa API de "Geocoding Reverso" (OpenStreetMap)
                 try {
                     const response = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lon}`);
                     const data = await response.json();
@@ -1706,14 +1640,12 @@ function getDeviceLocationForPostForm() {
                 console.warn("Erro ao obter localização:", error.message);
                 locationInput.placeholder = "Ex: Manaus, AM";
             },
-            { timeout: 5000 } // Timeout de 5 segundos
+            { timeout: 5000 } 
         );
     }
 }
 
-// API de Geolocalização (Sensor). Tenta obter lat/lon e preencher o formulário de SERVIÇO.
 function getDeviceLocationForServiceForm() {
-    // Adiciona campos hidden ao formulário de serviço
     const form = document.getElementById('serviceRegisterForm');
     if (!document.getElementById('serviceLatitude')) {
         form.insertAdjacentHTML('beforeend', `
@@ -1742,16 +1674,13 @@ function getDeviceLocationForServiceForm() {
     }
 }
 
-// API de Mapas (Leaflet.js). Mostra o mapa do serviço no modal de contato.
 function showServiceMapInModal(service) {
     if (!service.latitude || !service.longitude) {
-        // BLOCO 6 (Tarefa 6): Substitui alert
-        showMessage('contactModalMessage', 'Este serviço não possui localização no mapa.', 'error'); // Assumindo que o modal tem um 'contactModalMessage'
+        showMessage('contactModalMessage', 'Este serviço não possui localização no mapa.', 'error'); 
         return;
     }
 
     const modalContent = document.getElementById('contactModalContent');
-    // BLOCO 6 (Tarefa 7): Higieniza o nome e endereço
     modalContent.innerHTML = `
         <div style="text-align: center; margin-bottom: 20px;">
             <h3 style="color: #2d3748;">${escapeHTML(service.name)}</h3>
@@ -1762,8 +1691,6 @@ function showServiceMapInModal(service) {
     
     document.getElementById('contactModal').classList.add('active');
 
-    // Leaflet precisa que o container esteja visível para renderizar
-    // Usamos um timeout para garantir
     setTimeout(() => {
         try {
             const map = L.map('serviceMapContainer').setView([service.latitude, service.longitude], 16);
@@ -1788,42 +1715,30 @@ function showServiceMapInModal(service) {
 
 document.addEventListener('DOMContentLoaded', function() {
        
-    // Seção 4: Autenticação
     document.getElementById('loginForm').addEventListener('submit', handleLogin);
     document.getElementById('registerForm').addEventListener('submit', handleRegister);
     
-    // Seção 5: Perfil
     document.getElementById('profileForm').addEventListener('submit', handleProfileUpdate);
 
-    // Seção 6: Pets
     document.getElementById('petRegisterForm').addEventListener('submit', handlePetRegistration);
     
-    // Seção 7: Serviços
     document.getElementById('serviceRegisterForm').addEventListener('submit', handleServiceRegistration);
 
-    // Seção 8: Vacinas
     document.getElementById('vaccinationForm').addEventListener('submit', handleVaccination);
     
-    // Seção 10: Blog
     document.getElementById('postForm').addEventListener('submit', handlePostSubmit);
 
-    // BLOCO 6 (Tarefa 3): Adiciona listeners para filtros com debounce
-    const debouncedFilterPets = debounce(loadAdoptionPets, 400);
+    const debouncedFilterPets = debounce(() => loadAdoptionPets(true), 500); 
     const debouncedFilterServices = debounce(loadServices, 400);
 
-    // --- Pet Filters ---
     document.getElementById('searchFilter').addEventListener('keyup', debouncedFilterPets);
     document.getElementById('speciesFilter').addEventListener('change', loadAdoptionPets);
     document.getElementById('sizeFilter').addEventListener('change', loadAdoptionPets);
     document.getElementById('ageFilter').addEventListener('change', loadAdoptionPets);
 
-    // --- Service Filters ---
     document.getElementById('serviceSearchFilter').addEventListener('keyup', debouncedFilterServices);
     document.getElementById('serviceCategoryFilter').addEventListener('change', loadServices);
-    // FIM (Tarefa 3)
 
-
-    // Fecha qualquer modal ao clicar no fundo (fora do conteúdo)
     document.querySelectorAll('.modal').forEach(modal => {
         modal.addEventListener('click', function(e) {
             if (e.target === modal) {
@@ -1832,56 +1747,40 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     });
 
-    // Define a data máxima para "Data de Aplicação" da vacina como "hoje"
     const today = new Date().toISOString().split('T')[0];
     document.getElementById('vaccineDate').max = today;
 
-    // Isso substitui a antiga função 'checkLocalStorageLogin()'
-    supabase.auth.onAuthStateChange(async (event, session) => {
+    // CORREÇÃO: Usando supabaseClient no listener
+    supabaseClient.auth.onAuthStateChange(async (event, session) => {
         
         console.log('Supabase Auth Event:', event, session);
 
-        // Eventos que indicam que o usuário está (ou deveria estar) logado
         if (event === 'SIGNED_IN' || event === 'INITIAL_SESSION' || event === 'TOKEN_REFRESHED') {
             if (session) {
                 try {
                     const profile = await apiFetch('/auth/me'); 
-                    // BLOCO 6 (Tarefa 1): Armazena no AppState
                     AppState.currentUser = profile; 
                     
                 } catch (error) {
-                    // Erro crítico: O usuário existe no Supabase Auth,
-                    // mas não foi encontrado no nosso banco de dados 'users' (GET /me falhou).
                     console.error("Erro ao buscar perfil do usuário:", error.message);
-                    // BLOCO 6 (Tarefa 1): Limpa o AppState
                     AppState.currentUser = null;
-                    // Força o logout do Supabase para evitar um estado inconsistente
-                    await supabase.auth.signOut();
+                    // CORREÇÃO: Usando supabaseClient
+                    await supabaseClient.auth.signOut();
                 }
             } else {
-                // Sessão é nula, usuário não está logado
-                // BLOCO 6 (Tarefa 1): Limpa o AppState
                 AppState.currentUser = null;
             }
-            // Atualiza a UI (avatar, botões de login/logout)
             updateAuthButtons();
         
-        // Evento que indica que o usuário fez logout
         } else if (event === 'SIGNED_OUT') {
-            // BLOCO 6 (Tarefa 1): Limpa o AppState
             AppState.currentUser = null;
-            updateAuthButtons(); // Atualiza a UI
+            updateAuthButtons(); 
             
-            // Recarrega dados públicos para limpar informações privadas
-            // que poderiam estar visíveis (ex: botões de editar)
             loadAdoptionPets();
             loadServices();
             loadBlogPosts();
         }
     });
 
-    // Carrega a página inicial de adoção (pública)
-    // O listener onAuthStateChange cuidará de logar o usuário
-    // automaticamente se ele tiver uma sessão salva.
     loadAdoptionPets();
 });
