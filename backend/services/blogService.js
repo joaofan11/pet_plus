@@ -5,17 +5,28 @@ const { ForbiddenError, NotFoundError, AppError } = require('../utils/errors');
 
 /**
  * Busca todos os posts e anexa seus comentários e likes.
+ * Otimizado com Promise.all para evitar gargalos sequenciais.
  */
-const getAllPosts = async () => {
-  const posts = await blogRepository.findAllPosts();
+const getAllPosts = async (filters = {}) => {
+  // Busca os posts paginados do repositório
+  const result = await blogRepository.findAllPosts(filters);
   
-  // Otimização: Em vez de N+1 queries, podemos fazer 2 queries grandes
-  // Mas para manter a simplicidade do repositório, faremos N+1 por enquanto.
-  for (const post of posts) {
-    post.comments = await blogRepository.findCommentsForPost(post.id);
-    post.likes = await blogRepository.findLikesForPost(post.id);
-  }
-  return posts;
+  // Acessa o array de posts dentro de 'data'
+  const posts = result.data;
+
+  // Otimização: Executa as buscas de comentários e likes em PARALELO para todos os posts
+  await Promise.all(posts.map(async (post) => {
+    const [comments, likes] = await Promise.all([
+      blogRepository.findCommentsForPost(post.id),
+      blogRepository.findLikesForPost(post.id)
+    ]);
+    
+    post.comments = comments;
+    post.likes = likes;
+  }));
+
+  // Retorna a estrutura completa com metadados de paginação (data, total, page, totalPages)
+  return result;
 };
 
 /**
@@ -42,7 +53,6 @@ const addNewPost = async (ownerData, postData, file) => {
 
   const newPost = await blogRepository.createPost(newPostData);
   
-  // Retorna o post completo para a UI
   return {
     ...newPost,
     ownerName: name,
@@ -60,17 +70,16 @@ const updatePostDetails = async (postId, ownerId, updateData, file) => {
   if (!post) {
     throw new NotFoundError('Post não encontrado.');
   }
-  // Checagem de permissão
+  
   if (post.owner_id !== ownerId) {
     throw new ForbiddenError('Você não tem permissão para editar este post.');
   }
 
-  let photoUrl = updateData.photoUrl || post.photo_url; // Mantém a foto antiga
+  let photoUrl = updateData.photoUrl || post.photo_url;
 
   if (file) {
     try {
       photoUrl = await uploadFile(file.buffer, file.originalname, file.mimetype);
-      // TODO: Adicionar lógica para deletar a foto antiga do Supabase
     } catch (uploadError) {
       console.error(uploadError);
       throw new AppError('Erro ao fazer upload da nova foto do post.', 500);
@@ -117,10 +126,8 @@ const togglePostLike = async (postId, userId) => {
  */
 const addCommentToPost = async (postId, ownerData, content) => {
   const { userId, name } = ownerData;
-
   const newComment = await blogRepository.addComment(postId, userId, content);
   
-  // Retorna o comentário completo para a UI
   return {
     ...newComment,
     ownerName: name,

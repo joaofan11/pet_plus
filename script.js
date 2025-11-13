@@ -18,7 +18,12 @@ const AppState = {
     adoptionPets: [],
     myPets: [],
     serviceProviders: [],
-    blogPosts: []
+    blogPosts: [],
+    // NOVO: Controle de paginação
+    pagination: {
+        adoption: { page: 1, hasMore: true, isLoading: false },
+        blog: { page: 1, hasMore: true, isLoading: false }
+    }
 };
 
 // 2. FUNÇÕES AUXILIARES DE API (Refatorada)
@@ -79,6 +84,37 @@ function showMessage(elementId, message, type = 'success') {
     setTimeout(() => {
         messageEl.classList.remove('active');
     }, 5000);
+}
+
+function updateLoadMoreButton(btnId, hasMore, callback) {
+    let btn = document.getElementById(btnId);
+    const container = document.getElementById('adoptionPets');
+    
+    if (!hasMore) {
+        if (btn) btn.style.display = 'none';
+        return;
+    }
+
+    if (!btn && container) {
+        const btnContainer = document.createElement('div');
+        btnContainer.style.textAlign = 'center';
+        btnContainer.style.marginTop = '30px';
+        btnContainer.style.width = '100%';
+        btnContainer.style.gridColumn = '1 / -1'; // Ocupa toda a largura do grid
+        
+        btn = document.createElement('button');
+        btn.id = btnId;
+        btn.className = 'btn btn-secondary';
+        btn.textContent = 'Carregar Mais';
+        btn.style.width = 'auto';
+        btn.onclick = callback;
+        
+        btnContainer.appendChild(btn);
+        // Insere APÓS o container do grid
+        container.parentNode.appendChild(btnContainer);
+    } else if (btn) {
+        btn.style.display = 'inline-block';
+    }
 }
 
 // BLOCO 6 (Tarefa 5): Feedback visual para botões
@@ -553,31 +589,67 @@ async function handlePetRegistration(event) {
     }
 }
 
-async function loadAdoptionPets() {
+async function loadAdoptionPets(resetPage = false) {
     const container = document.getElementById('adoptionPets');
-    // BLOCO 6 (Tarefa 5): Feedback visual de loading
-    container.innerHTML = `<div class="loading"><div class="spinner"></div></div>`;
+    const loadMoreBtn = document.getElementById('loadMorePetsBtn');
+
+    // Reseta o estado se for uma nova filtragem
+    if (resetPage) {
+        AppState.pagination.adoption.page = 1;
+        AppState.pagination.adoption.hasMore = true;
+        AppState.adoptionPets = [];
+        container.innerHTML = ''; 
+    }
+
+    // Evita chamadas desnecessárias
+    if (!AppState.pagination.adoption.hasMore || AppState.pagination.adoption.isLoading) return;
+
+    AppState.pagination.adoption.isLoading = true;
     
+    // Mostra loading apenas se for a primeira carga (resetPage) ou se não houver conteúdo
+    if (resetPage) container.innerHTML = `<div class="loading"><div class="spinner"></div></div>`;
+    if (loadMoreBtn) setButtonLoading(loadMoreBtn, true);
+
     try {
-     
         const filters = getPetFilters();
-        const adoptionPets = await apiFetch(`/pets/adoption?${filters}`);
+        // Adiciona paginação na query string
+        const pageParams = `&page=${AppState.pagination.adoption.page}&limit=9`; 
         
-        // BLOCO 6 (Tarefa 1): Armazena no AppState
-        AppState.adoptionPets = adoptionPets; 
+        // O backend agora retorna { data, total, totalPages }
+        const response = await apiFetch(`/pets/adoption?${filters}${pageParams}`);
         
-        if (adoptionPets.length === 0) {
+        const newPets = response.data || [];
+        
+        // Atualiza o estado local concatenando os novos pets
+        AppState.adoptionPets = [...AppState.adoptionPets, ...newPets];
+        
+        if (resetPage) container.innerHTML = '';
+
+        if (newPets.length === 0 && AppState.pagination.adoption.page === 1) {
             container.innerHTML = `
                 <div class="empty-state">
                     <div class="empty-state-icon">🐾</div>
-                    <h3>Nenhum pet disponível</h3>
-                    <p>No momento, não há pets para adoção. Volte em breve!</p>
+                    <h3>Nenhum pet encontrado</h3>
+                    <p>Tente ajustar os filtros de busca.</p>
                 </div>`;
-            return;
+        } else {
+            // Renderiza com append (true) para não apagar os anteriores
+            displayPets(newPets, container, true, true);
         }
-        displayPets(adoptionPets, container, true);
+
+        // Incrementa página e verifica se há mais
+        AppState.pagination.adoption.page++;
+        AppState.pagination.adoption.hasMore = AppState.pagination.adoption.page <= response.totalPages;
+        
+        // Gerencia visibilidade do botão "Carregar Mais"
+        updateLoadMoreButton('loadMorePetsBtn', AppState.pagination.adoption.hasMore, () => loadAdoptionPets(false));
+
     } catch (error) {
-        container.innerHTML = `<div class="empty-state"><h3>Erro ao carregar pets. Tente novamente.</h3></div>`;
+        console.error(error);
+        if (resetPage) container.innerHTML = `<div class="empty-state"><h3>Erro ao carregar pets.</h3></div>`;
+    } finally {
+        AppState.pagination.adoption.isLoading = false;
+        if (loadMoreBtn) setButtonLoading(loadMoreBtn, false, 'Carregar Mais');
     }
 }
 
@@ -630,39 +702,32 @@ function getStatusIndicator(pet) {
 }
 
 
-function displayPets(petsToShow, container, isAdoptionView) {
-    // BLOCO 6 (Tarefa 7): Higieniza toda a renderização
-    container.innerHTML = petsToShow.map(pet => {
+function displayPets(petsToShow, container, isAdoptionView, shouldAppend = false) {
+    const htmlContent = petsToShow.map(pet => {
         const ownerName = pet.ownerName || 'Dono';
         const upcomingVaccines = getUpcomingVaccines(pet);
         
-        // BLOCO 6 (Tarefa 4): Lazy loading
-        const petImage = pet.photoUrl ? `<img loading="lazy" src="${escapeAttr(pet.photoUrl)}" alt="Foto de ${escapeAttr(pet.name)}">` : getSpeciesIcon(pet.species);
+        // Acessibilidade (alt text melhorado) + Lazy Loading
+        const petImage = pet.photoUrl 
+            ? `<img loading="lazy" src="${escapeAttr(pet.photoUrl)}" alt="Foto de ${escapeAttr(pet.name)}, um ${escapeAttr(pet.species)}">` 
+            : getSpeciesIcon(pet.species);
         
         let actionButtons = '';
         if (isAdoptionView) {
-            actionButtons = `<button class="btn btn-small" onclick="openPetProfile(${pet.id})">Ver Perfil</button>`;
-            // BLOCO 6 (Tarefa 1): Checa AppState.currentUser
+            actionButtons = `<button class="btn btn-small" onclick="openPetProfile(${pet.id})" aria-label="Ver perfil completo de ${escapeHTML(pet.name)}">Ver Perfil</button>`;
             if (AppState.currentUser) {
-                // BLOCO 6 (Tarefa 7): Escapa atributos do onclick
-                actionButtons += ` <button class="btn btn-small" onclick="showContact(${pet.ownerId}, '${escapeAttr(ownerName)}', '${escapeAttr(pet.ownerPhone)}', '${escapeAttr(pet.ownerEmail)}')" style="background: #38a169;">Contato</button>`;
+                actionButtons += ` <button class="btn btn-small" onclick="showContact(${pet.ownerId}, '${escapeAttr(ownerName)}', '${escapeAttr(pet.ownerPhone)}', '${escapeAttr(pet.ownerEmail)}')" style="background: #38a169;" aria-label="Ver contato do dono">Contato</button>`;
             } else {
                 actionButtons += ` <button class="btn btn-small" onclick="showPage('login')" style="background: #a0aec0;">Logar para Contato</button>`;
             }
         } else { 
-            actionButtons = `<button class="btn btn-small" onclick="openPetProfile(${pet.id})">Ver Perfil</button>`;
-            
-          
-            // BLOCO 6 (Tarefa 1): Checa AppState.currentUser
+            actionButtons = `<button class="btn btn-small" onclick="openPetProfile(${pet.id})" aria-label="Ver perfil de ${escapeHTML(pet.name)}">Ver Perfil</button>`;
             if (AppState.currentUser && pet.ownerId == AppState.currentUser.id) {
-                 actionButtons += `<button class="btn btn-small" onclick="showPetRegisterPage(${pet.id})" style="background: #4299e1;">Editar</button>`;
+                 actionButtons += `<button class="btn btn-small" onclick="showPetRegisterPage(${pet.id})" style="background: #4299e1;" aria-label="Editar ${escapeHTML(pet.name)}">Editar</button>`;
             }
-
             if (pet.type === 'personal') {
-                actionButtons += `<button class="btn btn-small" onclick="openVaccinationModal(${pet.id})" style="background: #ed8936;">+ Vacina</button>`;
+                actionButtons += `<button class="btn btn-small" onclick="openVaccinationModal(${pet.id})" style="background: #ed8936;" aria-label="Adicionar vacina para ${escapeHTML(pet.name)}">+ Vacina</button>`;
             } else if (pet.type === 'adoption' && pet.status === 'available') {
-               
-                // BLOCO 6 (Tarefa 1): Checa AppState.currentUser
                 if (AppState.currentUser && pet.ownerId == AppState.currentUser.id) {
                     actionButtons += `<button class="btn btn-small" onclick="markAsAdopted(${pet.id})" style="background: #38a169;">Marcar como Adotado</button>`;
                 }
@@ -670,12 +735,12 @@ function displayPets(petsToShow, container, isAdoptionView) {
         }
 
         return `
-            <div class="pet-card">
-                <div class="pet-image">
+            <div class="pet-card" role="article" aria-labelledby="pet-name-${pet.id}">
+                <div class="pet-image" role="img" aria-label="Foto do pet">
                     ${petImage}
                 </div>
                 <div class="pet-info">
-                    <div class="pet-name">${escapeHTML(pet.name)}</div>
+                    <div class="pet-name" id="pet-name-${pet.id}">${escapeHTML(pet.name)}</div>
                     <div class="pet-details">
                         <div class="pet-detail-item">
                             <span>Espécie:</span>
@@ -692,7 +757,7 @@ function displayPets(petsToShow, container, isAdoptionView) {
                     </div>
                     <div class="pet-description">${escapeHTML(pet.description)}</div>
                     ${upcomingVaccines.length > 0 ? 
-                        `<div style="background: #fff8e1; padding: 10px; border-radius: 8px; margin-bottom: 15px; border-left: 3px solid #ed8936;">
+                        `<div role="alert" style="background: #fff8e1; padding: 10px; border-radius: 8px; margin-bottom: 15px; border-left: 3px solid #ed8936;">
                             <small style="color: #ed8936; font-weight: 600;">⚠️ ${upcomingVaccines.length} vacina(s) próxima(s) do vencimento</small>
                         </div>` : ''
                     }
@@ -702,6 +767,12 @@ function displayPets(petsToShow, container, isAdoptionView) {
             </div>
         `;
     }).join('');
+
+    if (shouldAppend) {
+        container.insertAdjacentHTML('beforeend', htmlContent);
+    } else {
+        container.innerHTML = htmlContent;
+    }
 }
 
 
@@ -1797,7 +1868,7 @@ document.addEventListener('DOMContentLoaded', function() {
     document.getElementById('postForm').addEventListener('submit', handlePostSubmit);
 
     // BLOCO 6 (Tarefa 3): Adiciona listeners para filtros com debounce
-    const debouncedFilterPets = debounce(loadAdoptionPets, 400);
+    const debouncedFilterPets = debounce(() => loadAdoptionPets(true), 500); // 500ms debounce + reset paginação
     const debouncedFilterServices = debounce(loadServices, 400);
 
     // --- Pet Filters ---

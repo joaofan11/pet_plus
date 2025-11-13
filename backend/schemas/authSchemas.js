@@ -14,10 +14,14 @@ const registerSchema = Joi.object({
     phone: Joi.string().required().messages({
       'string.empty': 'O telefone é obrigatório.',
     }),
-    password: Joi.string().min(6).required().messages({
-      'string.empty': 'A senha é obrigatória.',
-      'string.min': 'A senha precisa ter pelo menos 6 caracteres.',
-    }),
+    // Atualizado: Regex para senha forte (8 chars, Maiúscula, Minúscula, Número, Símbolo)
+    password: Joi.string()
+      .pattern(new RegExp('^(?=.*[a-z])(?=.*[A-Z])(?=.*\\d)(?=.*[@$!%*?&])[A-Za-z\\d@$!%*?&]{8,}$'))
+      .required()
+      .messages({
+        'string.pattern.base': 'A senha deve ter pelo menos 8 caracteres, uma letra maiúscula, um número e um símbolo.',
+        'string.empty': 'A senha é obrigatória.',
+      }),
     // Garante que 'confirmPassword' seja igual a 'password'
     confirmPassword: Joi.string().valid(Joi.ref('password')).required().messages({
       'any.only': 'As senhas não coincidem.',

@@ -2,18 +2,17 @@
 const blogService = require('../services/blogService');
 const { sendResponse } = require('../utils/responseHandler');
 
-// Wrapper para facilitar o tratamento de erros em rotas async
 const catchAsync = (fn) => (req, res, next) => {
   Promise.resolve(fn(req, res, next)).catch(next);
 };
 
 const getAllPosts = catchAsync(async (req, res, next) => {
-  const posts = await blogService.getAllPosts();
+  // ATUALIZADO: Passa req.query (page, limit) para o serviço
+  const posts = await blogService.getAllPosts(req.query);
   sendResponse(res, 200, 'Posts recuperados com sucesso.', posts);
 });
 
 const createPost = catchAsync(async (req, res, next) => {
-  // req.userData (do checkAuth) tem { userId, name, email, photoUrl }
   const newPost = await blogService.addNewPost(req.userData, req.body, req.file);
   sendResponse(res, 201, 'Post criado com sucesso!', newPost);
 });

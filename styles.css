@@ -1228,3 +1228,66 @@ footer {
     height: 100%;
     object-fit: cover;
 }
+
+/* ===================================================================
+   11. MELHORIAS DE RESPONSIVIDADE E ACESSIBILIDADE
+   =================================================================== */
+
+/* Breakpoint para Tablets e Telas Médias */
+@media (max-width: 1024px) {
+    .container {
+        padding: 15px;
+    }
+
+    .features {
+        grid-template-columns: repeat(2, 1fr); /* 2 colunas em vez de 4 */
+        gap: 20px;
+    }
+}
+
+/* Ajustes finos para Mobile */
+@media (max-width: 600px) {
+    .nav-links {
+        display: grid;
+        grid-template-columns: 1fr 1fr; /* Botões em grade 2x2 */
+        gap: 10px;
+        justify-items: stretch;
+    }
+    
+    .nav-btn {
+        padding: 12px 10px;
+        font-size: 0.85rem;
+        text-align: center;
+        width: 100%;
+    }
+
+    .hero {
+        padding: 60px 20px;
+    }
+
+    .hero h1 {
+        font-size: 2.5rem;
+    }
+
+    .form-container {
+        padding: 30px 20px;
+    }
+
+    /* Modal ocupando mais espaço em telas pequenas */
+    .modal-content {
+        width: 95%;
+        padding: 25px;
+        margin: 10px;
+    }
+}
+
+/* Foco visível para Acessibilidade (Navegação por teclado) */
+button:focus-visible, 
+a:focus-visible, 
+input:focus-visible, 
+select:focus-visible, 
+textarea:focus-visible {
+    outline: 3px solid #99b06a;
+    outline-offset: 2px;
+    box-shadow: 0 0 0 4px rgba(153, 176, 106, 0.3);
+}
