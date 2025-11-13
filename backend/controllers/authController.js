@@ -1,54 +1,489 @@
-// backend/controllers/authController.js
-const authService = require('../services/authService');
-const authRepository = require('../repositories/authRepository'); // Necessário para pegar dados atuais
-const { sendResponse } = require('../utils/responseHandler');
-const { NotFoundError } = require('../utils/errors');
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="PetPlus - Plataforma completa para adoção, cuidados e serviços pet.">
 
-// Wrapper para facilitar o tratamento de erros em rotas async
-const catchAsync = (fn) => (req, res, next) => {
-  Promise.resolve(fn(req, res, next)).catch(next);
-};
+    <title>PetPlus</title>
 
-const register = catchAsync(async (req, res, next) => {
-  // A validação já ocorreu no middleware validateRequest
-  const user = await authService.registerUser(req.body, req.file);
-  sendResponse(res, 201, 'Cadastro realizado com sucesso!', user);
-});
+    <link rel="icon" type="image/png" href="logo_2.png">
+    <link rel="stylesheet" href="styles.css">
 
-const login = catchAsync(async (req, res, next) => {
-  const { email, password } = req.body;
-  const data = await authService.loginUser(email, password);
-  sendResponse(res, 200, `Bem-vindo(a), ${data.user.name}!`, data);
-});
-
-const getMe = catchAsync(async (req, res, next) => {
-  // req.userData é injetado pelo middleware checkAuth
-  const user = await authService.getUserProfile(req.userData.userId);
-  sendResponse(res, 200, 'Perfil recuperado com sucesso.', user);
-});
-
-const updateMe = catchAsync(async (req, res, next) => {
-    const { userId } = req.userData;
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+     integrity="sha256-p4NxAoJBhpmDbsnjfDQDfLCLD9XPMC7DGNhILAZSJSs="
+     crossorigin=""/>
     
-    // Precisamos dos dados atuais do usuário para comparar
-    const currentUser = await authRepository.findUserById(userId);
-    if (!currentUser) {
-        throw new NotFoundError('Usuário não encontrado.'); // Deve ser raro, pois ele está logado
-    }
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
+     integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZdA="
+     crossorigin=""></script>
 
-    const updatedUser = await authService.updateUserProfile(
-        userId,
-        currentUser, 
-        req.body, 
-        req.file
-    );
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+</head>
+
+<body>
+
+    <header>
+        <nav id="navigation" aria-label="Menu principal">
+            <div class="logo">
+                <img src="logo.png" alt="Logotipo PetPlus" width="50" height="50">
+                <span>PetPlus</span>
+            </div>
+
+            <div class="nav-wrapper" style="display: flex; align-items: center; gap: 20px; flex-wrap: wrap;">
+                <div id="userInfo" class="user-info">
+                    👋 Olá, <span id="userName"></span>
+                </div>
+
+                <div class="nav-links">
+                    <button class="nav-btn active" onclick="showPage('landing')">Home</button>
+                    <button class="nav-btn" onclick="showPage('adoption')">Adotar</button>
+                    <button class="nav-btn" onclick="showPage('services')">Serviços</button>
+                    <button class="nav-btn" onclick="showPage('blog')">Blog</button>
+                    
+                    <button class="nav-btn" onclick="showPage('my-pets')" id="myPetsBtn" style="display: none;">Meus Pets</button>
+                    <button class="nav-btn" onclick="showPage('login')" id="loginBtn">Entrar</button>
+                    <button class="nav-btn" onclick="logout()" id="logoutBtn" style="display: none;">Sair</button>
+                </div>
+            </div>
+        </nav>
+    </header>
+
+    <main class="container">
+        
+        <section id="landing" class="page active">
+            <div class="hero">
+                <h1>Conectando Corações</h1>
+                <p>A plataforma mais completa para adoção de pets e gestão da saúde dos seus animais de estimação</p>
+                <div class="cta-buttons">
+                    <button class="cta-btn" onclick="showPage('adoption')">Adotar um Pet</button>
+                    <button class="cta-btn secondary" onclick="showPage('register')">Cadastrar-se</button>
+                </div>
+            </div>
+
+            <div class="features">
+                <article class="feature-card">
+                    <span class="feature-icon">🏠</span>
+                    <h3>Encontre um Lar</h3>
+                    <p>Milhares de animais esperando uma família amorosa. Use nossos filtros avançados.</p>
+                </article>
+                <article class="feature-card">
+                    <span class="feature-icon">❤️</span>
+                    <h3>Doe com Amor</h3>
+                    <p>Ajude um animal a encontrar uma nova família. Cadastre pets para adoção de forma simples.</p>
+                </article>
+                <article class="feature-card">
+                    <span class="feature-icon">📱</span>
+                    <h3>Carteira Digital</h3>
+                    <p>Mantenha o histórico completo de vacinas e consultas dos seus pets sempre organizado.</p>
+                </article>
+                <article class="feature-card">
+                    <span class="feature-icon">🩺</span>
+                    <h3>Serviços</h3>
+                    <p>Encontre tudo o que seu pet precisa: hospedagem, creche, pet sitter e veterinários.</p>
+                </article>
+            </div>
+        </section>
+
+        <section id="login" class="page">
+            <div class="form-container">
+                <h2 class="form-title">Fazer Login</h2>
+                <div id="loginMessage" class="message"></div>
+                <form id="loginForm">
+                    <div class="form-group">
+                        <label for="loginEmail">Email</label>
+                        <input type="email" id="loginEmail" name="email" required placeholder="seu@email.com" autocomplete="email">
+                    </div>
+                    <div class="form-group">
+                        <label for="loginPassword">Senha</label>
+                        <input type="password" id="loginPassword" name="password" required placeholder="••••••••" autocomplete="current-password">
+                    </div>
+                    <button type="submit" class="btn">Entrar</button>
+                </form>
+                <p class="text-muted" style="text-align: center; margin-top: 25px;">
+                    Não tem conta? 
+                    <a href="#" onclick="showPage('register')" class="link" style="color: #667eea; font-weight: 600;">Cadastre-se aqui</a>
+                </p>
+                <p class="text-muted small" style="text-align: center; margin-top: 10px;">
+                     <a href="#" onclick="handlePasswordReset()" style="color: #718096; font-size: 0.9em;">Esqueci minha senha</a>
+                </p>
+            </div>
+        </section>
+
+        <section id="register" class="page">
+            <div class="form-container">
+                <h2 class="form-title">Criar Conta</h2>
+                <div id="registerMessage" class="message"></div>
+                <form id="registerForm">
+                    <div class="form-group">
+                        <label for="registerName">Nome Completo</label>
+                        <input type="text" id="registerName" name="name" required placeholder="Seu nome completo" autocomplete="name">
+                    </div>
+                    <div class="form-group">
+                        <label for="registerEmail">Email</label>
+                        <input type="email" id="registerEmail" name="email" required placeholder="seu@email.com" autocomplete="email">
+                    </div>
+                    <div class="form-group">
+                        <label for="registerPhone">Telefone</label>
+                        <input type="tel" id="registerPhone" name="phone" required placeholder="(00) 00000-0000" autocomplete="tel">
+                    </div>
+                    <div class="form-group">
+                        <label for="registerPhoto">Foto de Perfil (Opcional)</label>
+                        <input type="file" id="registerPhoto" name="photo" accept="image/*">
+                    </div>
+                    <div class="form-group">
+                        <label for="registerPassword">Senha</label>
+                        <input type="password" id="registerPassword" name="password" required minlength="6" placeholder="••••••••" autocomplete="new-password">
+                    </div>
+                    <div class="form-group">
+                        <label for="registerConfirmPassword">Confirmar Senha</label>
+                        <input type="password" id="registerConfirmPassword" name="confirmPassword" required placeholder="••••••••" autocomplete="new-password">
+                    </div>
+                    <button type="submit" class="btn">Criar Conta</button>
+                </form>
+                <p class="text-muted" style="text-align: center; margin-top: 25px;">
+                    Já tem conta? 
+                    <a href="#" onclick="showPage('login')" class="link" style="color: #667eea; font-weight: 600;">Faça login aqui</a>
+                </p>
+            </div>
+        </section>
+
+        <section id="profile-edit" class="page">
+            <div class="form-container">
+                <h2 class="form-title">Editar Perfil</h2>
+                <div id="profileMessage" class="message"></div>
+                <form id="profileForm">
+                    <div class="form-group">
+                        <label for="profilePhoto">Foto de Perfil</label>
+                        <input type="file" id="profilePhoto" name="photo" accept="image/*">
+                        <small>Deixe em branco para manter a foto atual.</small>
+                    </div>
+                    <div class="form-group">
+                        <label for="profileName">Nome Completo</label>
+                        <input type="text" id="profileName" name="name" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="profileEmail">Email</label>
+                        <input type="email" id="profileEmail" name="email" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="profilePhone">Telefone</label>
+                        <input type="tel" id="profilePhone" name="phone" required>
+                    </div>
+                    <button type="submit" class="btn">Salvar Alterações</button>
+                    <button type="button" class="btn btn-secondary" onclick="showPage('landing')" style="margin-top: 15px;">Cancelar</button>
+                </form>
+            </div>
+        </section> 
+
+        <section id="pet-register" class="page">
+            <div class="form-container">
+                <h2 class="form-title" id="petFormTitle">Cadastrar Pet</h2>
+                <div id="petRegisterMessage" class="message"></div>
+                <form id="petRegisterForm">
+                    <input type="hidden" id="petEditId" name="petEditId">
+                    
+                    <div class="form-group">
+                        <label for="petPhoto">Foto do Pet</label>
+                        <input type="file" id="petPhoto" name="photo" accept="image/*">
+                    </div>
+                    <div class="form-group">
+                        <label for="petType">Tipo de Cadastro</label>
+                        <select id="petType" name="type" required>
+                            <option value="">Selecione...</option>
+                            <option value="adoption">Para Adoção</option>
+                            <option value="personal">Pet Pessoal</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="petName">Nome do Pet</label>
+                        <input type="text" id="petName" name="name" required placeholder="Nome do seu pet">
+                    </div>
+                    <div class="form-group">
+                        <label for="petSpecies">Espécie</label>
+                        <select id="petSpecies" name="species" required>
+                            <option value="">Selecione...</option>
+                            <option value="dog">Cão</option>
+                            <option value="cat">Gato</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="petBreed">Raça</label>
+                        <input type="text" id="petBreed" name="breed" required placeholder="Raça do pet">
+                    </div>
+                    <div class="form-group">
+                        <label for="petAge">Idade</label>
+                        <select id="petAge" name="age" required>
+                            <option value="">Selecione...</option>
+                            <option value="puppy">Filhote (0-1 ano)</option>
+                            <option value="young">Jovem (1-3 anos)</option>
+                            <option value="adult">Adulto (3-7 anos)</option>
+                            <option value="senior">Idoso (7+ anos)</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="petSize">Porte</label>
+                        <select id="petSize" name="size" required>
+                            <option value="">Selecione...</option>
+                            <option value="small">Pequeno</option>
+                            <option value="medium">Médio</option>
+                            <option value="large">Grande</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="petGender">Sexo</label>
+                        <select id="petGender" name="gender" required>
+                            <option value="">Selecione...</option>
+                            <option value="male">Macho</option>
+                            <option value="female">Fêmea</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="petDescription">Descrição</label>
+                        <textarea id="petDescription" name="description" placeholder="Personalidade, cuidados especiais, etc." required></textarea>
+                    </div>
+                    <button type="submit" class="btn" id="petFormButton">Cadastrar Pet</button>
+                
+                    <div id="deletePetButtonWrapper" style="display: none; margin-top: 20px;">
+                        <button type="button" class="btn btn-danger" onclick="deletePetFromForm()">Excluir Pet</button>
+                    </div>
+                </form>
+            </div>
+        </section>
+
+        <section id="adoption" class="page">
+            <div style="padding: 30px 40px 0;">
+                <h2 style="text-align: center; margin-bottom: 40px; color: #2d3748; font-size: 2.2rem; font-weight: 700;">Pets Disponíveis para Adoção</h2>
+                
+                <div class="filters">
+                    <div class="filter-group">
+                        <label>🔍 Buscar</label>
+                        <input type="text" id="searchFilter" placeholder="Nome ou raça...">
+                    </div>
+                    <div class="filter-group">
+                        <label>🐾 Espécie</label>
+                        <select id="speciesFilter">
+                            <option value="">Todas</option>
+                            <option value="dog">Cão</option>
+                            <option value="cat">Gato</option>
+                        </select>
+                    </div>
+                    <div class="filter-group">
+                        <label>📏 Porte</label>
+                        <select id="sizeFilter">
+                            <option value="">Todos</option>
+                            <option value="small">Pequeno</option>
+                            <option value="medium">Médio</option>
+                            <option value="large">Grande</option>
+                        </select>
+                    </div>
+                    <div class="filter-group">
+                        <label>🎂 Idade</label>
+                        <select id="ageFilter">
+                            <option value="">Todas</option>
+                            <option value="puppy">Filhote</option>
+                            <option value="young">Jovem</option>
+                            <option value="adult">Adulto</option>
+                            <option value="senior">Idoso</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div id="adoptionPets" class="pets-grid">
+                    </div>
+                
+                <div style="text-align: center; margin-top: 30px; margin-bottom: 40px;">
+                    <button id="loadMorePetsBtn" class="btn btn-secondary" onclick="loadAdoptionPets(false)" style="display: none;">Carregar Mais</button>
+                </div>
+            </div>
+        </section>
+
+        <section id="my-pets" class="page">
+            <div style="padding: 30px 40px;">
+                <div id="myPetsMessage" class="message" style="margin-bottom: 30px;"></div>
+
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 40px; flex-wrap: wrap; gap: 20px;">
+                    <h2 style="color: #2d3748; font-size: 2.2rem; font-weight: 700;">Meus Pets</h2>
+                    <button class="btn" onclick="showPetRegisterPage(null)" style="width: auto;">+ Cadastrar Novo Pet</button>
+                </div>
+                
+                <div id="myPetsGrid" class="pets-grid">
+                    </div>
+            </div>
+        </section>
+
+        <section id="services" class="page">
+            <div style="padding: 30px 40px 0;">
+                <h2 style="text-align: center; margin-bottom: 40px; color: #2d3748; font-size: 2.2rem; font-weight: 700;">Encontre Serviços para seu Pet</h2>
+                <div class="filters">
+                    <div class="filter-group">
+                        <label>🔍 Buscar</label>
+                        <input type="text" id="serviceSearchFilter" placeholder="Nome, profissional ou bairro...">
+                    </div>
+                    <div class="filter-group">
+                        <label>🏷️ Categoria</label>
+                        <select id="serviceCategoryFilter">
+                            <option value="">Todas</option>
+                            <option value="vet">Veterinários</option>
+                            <option value="sitter">Cuidadores</option>
+                            <option value="walker">Passeadores</option>
+                            <option value="transport">Transporte</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div id="servicesGrid" class="services-grid" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 20px; padding-bottom: 40px;">
+                    </div>
+            </div>
+        </section>
+        
+        <section id="service-register" class="page">
+            <div class="form-container">
+                <h2 class="form-title" id="serviceFormTitle">Cadastrar Serviço</h2>
+                <div id="serviceRegisterMessage" class="message"></div>
+                <form id="serviceRegisterForm">
+                    <input type="hidden" id="serviceEditId" name="serviceEditId">
+                    <input type="hidden" id="serviceLatitude" name="latitude">
+                    <input type="hidden" id="serviceLongitude" name="longitude">
+
+                    <div class="form-group">
+                        <label for="serviceCategory">Categoria</label>
+                        <select id="serviceCategory" name="category" required>
+                            <option value="">Selecione...</option>
+                            <option value="vet">🩺 Veterinários</option>
+                            <option value="sitter">❤️ Cuidadores</option>
+                            <option value="walker">🐕 Passeadores</option>
+                            <option value="transport">🚐 Transporte Pet</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="serviceName">Nome do Serviço/Empresa</label>
+                        <input type="text" id="serviceName" name="name" required placeholder="Ex: Clínica Veterinária PetSaúde">
+                    </div>
+                    <div class="form-group">
+                        <label for="serviceProfessional">Nome do Profissional</label>
+                        <input type="text" id="serviceProfessional" name="professional" required placeholder="Ex: Dr. João Silva">
+                    </div>
+                    <div class="form-group">
+                        <label for="servicePhone">Telefone</label>
+                        <input type="tel" id="servicePhone" name="phone" required placeholder="(00) 00000-0000">
+                    </div>
+                    <div class="form-group">
+                        <label for="serviceAddress">Endereço/Área de Atendimento</label>
+                        <input type="text" id="serviceAddress" name="address" required placeholder="Ex: Rua das Flores, 123 - Centro">
+                    </div>
+                    <div class="form-group">
+                        <label for="serviceDescription">Descrição do Serviço</label>
+                        <textarea id="serviceDescription" name="description" required placeholder="Descreva os serviços oferecidos, horários, etc."></textarea>
+                    </div>
+                    <button type="submit" class="btn" id="serviceFormButton">Cadastrar Serviço</button>
+                
+                    <div id="deleteServiceButtonWrapper" style="display: none; margin-top: 20px;">
+                        <button type="button" class="btn btn-danger" onclick="deleteServiceFromForm()">Excluir Serviço</button>
+                    </div>
+                </form>
+            </div>
+        </section>
+
+        <section id="blog" class="page">
+            <div style="padding: 30px 40px 0;">
+                <h2 style="text-align: center; margin-bottom: 40px; color: #2d3748; font-size: 2.2rem; font-weight: 700;">Blog PetPlus</h2>
+                
+                <div id="blog-actions" style="display: none; text-align: center; margin-bottom: 30px;">
+                    <button class="btn" onclick="toggleNewPostForm(true)">+ Escrever Novo Post</button>
+                </div>
+
+                <div id="new-post-container" style="display: none; margin-bottom: 40px;">
+                    <div class="form-container" style="max-width: 800px; padding: 40px; border: 1px solid #e2e8f0; border-radius: 20px; background: #f7fafc;">
+                        <h2 class="form-title" id="postFormTitle" style="font-size: 1.8rem; margin-bottom: 30px;">Novo Post</h2>
+                        <div id="postMessage" class="message"></div>
+                        <form id="postForm">
+                            <input type="hidden" id="postEditId" name="postEditId">
+                            
+                            <div class="form-group">
+                                <label for="postContent">O que está acontecendo?</label>
+                                <textarea id="postContent" name="content" required placeholder="Escreva seu post aqui... (estilo tweet)" maxlength="280"></textarea>
+                            </div>
+                            
+                            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
+                                <div class="form-group">
+                                    <label for="postPhoto">Adicionar Foto</label>
+                                    <input type="file" id="postPhoto" name="photo" accept="image/*" style="padding: 12px 15px;">
+                                </div>
+                                <div class="form-group">
+                                    <label for="postLocation">Localização</label>
+                                    <input type="text" id="postLocation" name="location" placeholder="Ex: Manaus, AM">
+                                </div>
+                            </div>
+                            
+                            <button type="submit" class="btn" id="postFormButton">Publicar</button>
+                        
+                            <div id="deletePostButtonWrapper" style="display: none; margin-top: 20px; display: flex; gap: 10px;">
+                                <button type="button" class="btn btn-danger" onclick="deletePostFromForm()">Excluir Post</button>
+                                <button type="button" class="btn btn-secondary" onclick="toggleNewPostForm(false)">Cancelar</button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+
+                <div id="blogFeed" class="blog-feed">
+                    </div>
+            </div>
+        </section>
+
+        <div id="petModal" class="modal">
+            <div class="modal-content">
+                <span class="close" onclick="closePetModal()">&times;</span>
+                <div id="petModalContent"></div>
+            </div>
+        </div>
+
+        <div id="vaccinationModal" class="modal">
+            <div class="modal-content">
+                <span class="close" onclick="closeVaccinationModal()">&times;</span>
+                <h3 style="margin-bottom: 25px; color: #2d3748; font-size: 1.5rem;">Adicionar Vacina</h3>
+                <form id="vaccinationForm">
+                    <input type="hidden" id="vaccinePetId" name="petId">
+                    <div class="form-group">
+                        <label for="vaccineName">Nome da Vacina</label>
+                        <input type="text" id="vaccineName" name="name" required placeholder="Ex: V10, Antirrábica...">
+                    </div>
+                    <div class="form-group">
+                        <label for="vaccineDate">Data de Aplicação</label>
+                        <input type="date" id="vaccineDate" name="date" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="vaccineNext">Próxima Dose (opcional)</label>
+                        <input type="date" id="vaccineNext" name="nextDate">
+                    </div>
+                    <div class="form-group">
+                        <label for="vaccineVet">Veterinário</label>
+                        <input type="text" id="vaccineVet" name="vet" placeholder="Nome do veterinário ou clínica">
+                    </div>
+                    <div class="form-group">
+                        <label for="vaccineNotes">Observações</label>
+                        <textarea id="vaccineNotes" name="notes" placeholder="Observações adicionais, reações, etc."></textarea>
+                    </div>
+                    <button type="submit" class="btn">Adicionar Vacina</button>
+                </form>
+            </div>
+        </div>
+
+        <div id="contactModal" class="modal">
+            <div class="modal-content">
+                <span class="close" onclick="closeContactModal()">&times;</span>
+                <div id="contactModalContent"></div>
+            </div>
+        </div>
+
+    </main> 
     
-    sendResponse(res, 200, 'Perfil atualizado com sucesso!', updatedUser);
-});
+    <footer>
+        <p>Desenvolvido pelo Time NoRest</p>
+    </footer>
+    
+    <script src="https://unpkg.com/@supabase/supabase-js@2"></script>
+    <script src="script.js"></script>
 
-module.exports = {
-  register,
-  login,
-  getMe,
-  updateMe
-};
+</body>
+</html>
