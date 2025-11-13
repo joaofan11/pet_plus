@@ -5,11 +5,12 @@ const SUPABASE_URL = 'https://ugffvmqwdmgikdjggmdz.supabase.co';
 const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InVnZmZ2bXF3ZG1naWtkamdnbWR6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjI5MDU4MzUsImV4cCI6MjA3ODQ4MTgzNX0.bWlrMvEUPYdiFYzlvieX73rCJg-FcVeCWIbHGg70QjQ';
 
 // Verifica se as chaves foram inseridas
-if (SUPABASE_URL === 'URL_DO_SEU_PROJETO_SUPABASE' || SUPABASE_ANON_KEY === 'CHAVE_ANON_PUBLICA_DO_SUPABASE') {
-    alert('ERRO: Configure as variáveis SUPABASE_URL e SUPABASE_ANON_KEY no script.js');
+if (SUPABASE_URL.includes('URL_DO_SEU_PROJETO') || SUPABASE_ANON_KEY.includes('CHAVE_ANON')) {
+    alert('ERRO: Configure as variáveis SUPABASE no script.js');
 }
 
-const supabase = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+const { createClient } = window.supabase;
+const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
 // BLOCO 6 (Tarefas 1 e 2): Gerenciamento de Estado Centralizado
 // Variáveis globais soltas foram removidas e agrupadas em um objeto AppState.
@@ -1944,4 +1945,5 @@ document.addEventListener('DOMContentLoaded', function() {
     // O listener onAuthStateChange cuidará de logar o usuário
     // automaticamente se ele tiver uma sessão salva.
     loadAdoptionPets();
+
 });
