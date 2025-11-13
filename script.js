@@ -1,8 +1,8 @@
 // 1. ESTADO DA APLICAÇÃO E INICIALIZAÇÃO DO SUPABASE
 
 const API_URL = 'https://petplus-backend.onrender.com'; // URL do seu backend no Render
-const SUPABASE_URL = 'https://ugffvmqwdmgikdjggmdz.supabase.co';
-const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InVnZmZ2bXF3ZG1naWtkamdnbWR6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjI5MDU4MzUsImV4cCI6MjA3ODQ4MTgzNX0.bWlrMvEUPYdiFYzlvieX73rCJg-FcVeCWIbHGg70QjQ';
+const SUPABASE_URL = 'https://pxmuzlsltlvafsxhngnk.supabase.co';
+const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InB4bXV6bHNsdGx2YWZzeGhuZ25rIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjI5OTcwMDAsImV4cCI6MjA3ODU3MzAwMH0.FchH_hEMgS7454tRwdX0kSwrPKWbDVhxqmE_6161-mM';
 
 // Verifica se as chaves foram inseridas
 if (SUPABASE_URL === 'URL_DO_SEU_PROJETO_SUPABASE' || SUPABASE_ANON_KEY === 'CHAVE_ANON_PUBLICA_DO_SUPABASE') {
@@ -1944,4 +1944,5 @@ document.addEventListener('DOMContentLoaded', function() {
     // O listener onAuthStateChange cuidará de logar o usuário
     // automaticamente se ele tiver uma sessão salva.
     loadAdoptionPets();
+
 });
