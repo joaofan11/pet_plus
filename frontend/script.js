@@ -1,14 +1,15 @@
 // frontend/script.js
 
 // ===================================================================
-// 1. CONFIGURAÇÃO E INICIALIZAÇÃO (CORREÇÃO DO ERRO AQUI)
+// 1. CONFIGURAÇÃO E INICIALIZAÇÃO
 // ===================================================================
 
-const API_URL = 'https://pet-plus.onrender.com'; // Verifique se esta é a URL do seu Render
+// CORREÇÃO 1: Adicionado '/api' ao final da URL base
+const API_URL = 'https://pet-plus.onrender.com/api'; 
 const SUPABASE_URL = 'https://ugffvmqwdmgikdjggmdz.supabase.co';
 const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InVnZmZ2bXF3ZG1naWtkamdnbWR6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjI5MDU4MzUsImV4cCI6MjA3ODQ4MTgzNX0.bWlrMvEUPYdiFYzlvieX73rCJg-FcVeCWIbHGg70QjQ';
 
-// CORREÇÃO: Usamos 'supabaseClient' (nome diferente da lib) e 'window.supabase'
+// Inicializa o cliente Supabase (evitando conflito de nomes)
 const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
 // Estado Global da Aplicação
@@ -29,12 +30,10 @@ const AppState = {
 // ===================================================================
 
 async function apiFetch(endpoint, options = {}) {
-    const headers = {
-        ...options.headers,
-    };
+    const headers = { ...options.headers };
 
-    // CORREÇÃO: Usamos supabaseClient aqui também
-    const { data: { session }, error } = await supabaseClient.auth.getSession();
+    // Obtém sessão atual do Supabase
+    const { data: { session } } = await supabaseClient.auth.getSession();
 
     if (session) {
         headers['Authorization'] = `Bearer ${session.access_token}`;
@@ -45,6 +44,8 @@ async function apiFetch(endpoint, options = {}) {
     }
 
     try {
+        // O endpoint já virá com a barra inicial (ex: /pets/adoption)
+        // API_URL já tem o /api, então fica: .../api/pets/adoption
         const response = await fetch(`${API_URL}${endpoint}`, {
             ...options,
             headers,
@@ -98,7 +99,29 @@ function escapeAttr(str) {
     return String(str).replace(/'/g, '&#39;').replace(/"/g, '&quot;');
 }
 
-// Navegação SPA (Single Page Application)
+function debounce(func, delay = 400) {
+    let timer;
+    return function(...args) {
+        clearTimeout(timer);
+        timer = setTimeout(() => func.apply(this, args), delay);
+    };
+}
+
+// Funções de formatação
+function formatDateTime(dateString) {
+    const date = new Date(dateString);
+    return date.toLocaleString('pt-BR');
+}
+function formatDate(dateString) {
+    const date = new Date(dateString);
+    return date.toLocaleDateString('pt-BR');
+}
+function getSpeciesIcon(species) { return species === 'dog' ? '🐕' : '🐈'; }
+
+// ===================================================================
+// 4. NAVEGAÇÃO E ROTEAMENTO
+// ===================================================================
+
 function showPage(pageId) {
     document.querySelectorAll('.page').forEach(page => page.classList.remove('active'));
     document.querySelectorAll('.nav-btn').forEach(btn => btn.classList.remove('active'));
@@ -106,7 +129,6 @@ function showPage(pageId) {
     const targetPage = document.getElementById(pageId);
     if (targetPage) targetPage.classList.add('active');
 
-    // Atualiza menu ativo
     const navBtns = document.querySelectorAll('.nav-btn');
     navBtns.forEach(btn => {
         if (btn.getAttribute('onclick') && btn.getAttribute('onclick').includes(pageId)) {
@@ -114,7 +136,6 @@ function showPage(pageId) {
         }
     });
 
-    // Carrega dados específicos da página
     if (pageId === 'adoption') loadAdoptionPets();
     else if (pageId === 'my-pets') loadMyPets();
     else if (pageId === 'services') loadServices();
@@ -122,7 +143,7 @@ function showPage(pageId) {
 }
 
 // ===================================================================
-// 4. AUTENTICAÇÃO E SESSÃO
+// 5. AUTENTICAÇÃO E USUÁRIOS
 // ===================================================================
 
 function updateAuthButtons() {
@@ -144,6 +165,7 @@ function updateAuthButtons() {
         userInfo.innerHTML = `${avatarHtml} <span>Olá, ${escapeHTML(user.name.split(' ')[0])}</span>`;
         userInfo.classList.add('active');
         userInfo.onclick = showProfileEditPage;
+        userInfo.style.cursor = 'pointer';
     } else {
         loginBtn.style.display = 'inline-block';
         logoutBtn.style.display = 'none';
@@ -151,6 +173,7 @@ function updateAuthButtons() {
         userInfo.innerHTML = `👋 Olá, <span id="userName"></span>`;
         userInfo.classList.remove('active');
         userInfo.onclick = null;
+        userInfo.style.cursor = 'default';
     }
 }
 
@@ -158,7 +181,7 @@ async function handleLogin(event) {
     event.preventDefault();
     const email = document.getElementById('loginEmail').value.trim();
     const password = document.getElementById('loginPassword').value;
-    const btn = event.target.querySelector('button');
+    const btn = event.target.querySelector('button[type="submit"]');
 
     setButtonLoading(btn, true);
 
@@ -170,7 +193,7 @@ async function handleLogin(event) {
         document.getElementById('loginForm').reset();
         setTimeout(() => showPage('landing'), 1000);
     } catch (error) {
-        showMessage('loginMessage', 'Erro: Email ou senha incorretos.', 'error');
+        showMessage('loginMessage', 'Email ou senha incorretos.', 'error');
     } finally {
         setButtonLoading(btn, false, 'Entrar');
     }
@@ -183,7 +206,7 @@ async function handleRegister(event) {
     const phone = document.getElementById('registerPhone').value.trim();
     const password = document.getElementById('registerPassword').value;
     const confirm = document.getElementById('registerConfirmPassword').value;
-    const btn = event.target.querySelector('button');
+    const btn = event.target.querySelector('button[type="submit"]');
 
     if (password !== confirm) {
         showMessage('registerMessage', 'As senhas não coincidem.', 'error');
@@ -193,7 +216,7 @@ async function handleRegister(event) {
     setButtonLoading(btn, true);
 
     try {
-        // 1. Cria no Supabase Auth
+        // 1. Cria conta no Supabase Auth
         const { data, error } = await supabaseClient.auth.signUp({
             email, password, options: { data: { name, phone } }
         });
@@ -202,9 +225,9 @@ async function handleRegister(event) {
 
         // 2. Cria perfil no Backend Local
         if (data.user) {
-            await fetch(`${API_URL}/api/auth/register`, {
+            // CORREÇÃO 2: Usando apiFetch para garantir URL correta
+            await apiFetch('/auth/register', {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ name, email, phone, authId: data.user.id })
             });
         }
@@ -225,17 +248,44 @@ async function logout() {
     showPage('landing');
 }
 
-async function checkAuth() {
-    const { data: { session } } = await supabaseClient.auth.getSession();
-    if (!session) {
-        showPage('login');
-        throw new Error('Faça login para continuar.');
+async function showProfileEditPage() {
+    if (!AppState.currentUser) return showPage('login');
+    
+    const user = AppState.currentUser;
+    document.getElementById('profileName').value = user.name || '';
+    document.getElementById('profileEmail').value = user.email || '';
+    document.getElementById('profilePhone').value = user.phone || '';
+    
+    showPage('profile-edit');
+}
+
+async function handleProfileUpdate(event) {
+    event.preventDefault();
+    const btn = event.target.querySelector('button[type="submit"]');
+    setButtonLoading(btn, true);
+
+    try {
+        const formData = new FormData(event.target);
+        // isFormData: true impede que apiFetch defina Content-Type JSON
+        const data = await apiFetch('/auth/me', {
+            method: 'PUT',
+            body: formData,
+            isFormData: true 
+        });
+
+        showMessage('profileMessage', 'Perfil atualizado!', 'success');
+        AppState.currentUser = data.user;
+        updateAuthButtons();
+        setTimeout(() => showPage('landing'), 1500);
+    } catch (error) {
+        showMessage('profileMessage', error.message, 'error');
+    } finally {
+        setButtonLoading(btn, false, 'Salvar Alterações');
     }
-    return session.user;
 }
 
 // ===================================================================
-// 5. GERENCIAMENTO DE PETS
+// 6. GERENCIAMENTO DE PETS
 // ===================================================================
 
 async function loadAdoptionPets() {
@@ -243,16 +293,17 @@ async function loadAdoptionPets() {
     container.innerHTML = '<div class="loading"><div class="spinner"></div></div>';
     
     try {
+        // Com a correção do API_URL, isso chamará /api/pets/adoption
         const response = await apiFetch('/pets/adoption');
         AppState.adoptionPets = response.data || [];
         renderPetList(AppState.adoptionPets, container, true);
     } catch (error) {
+        console.error(error);
         container.innerHTML = '<div class="empty-state">Erro ao carregar pets.</div>';
     }
 }
 
 async function loadMyPets() {
-    try { await checkAuth(); } catch { return; }
     const container = document.getElementById('myPetsGrid');
     container.innerHTML = '<div class="loading"><div class="spinner"></div></div>';
 
@@ -261,7 +312,7 @@ async function loadMyPets() {
         AppState.myPets = pets;
         renderPetList(pets, container, false);
     } catch (error) {
-        container.innerHTML = '<div class="empty-state">Você ainda não tem pets cadastrados.</div>';
+        container.innerHTML = '<div class="empty-state">Faça login para ver seus pets.</div>';
     }
 }
 
@@ -274,7 +325,7 @@ function renderPetList(pets, container, isAdoption) {
     container.innerHTML = pets.map(pet => `
         <div class="pet-card">
             <div class="pet-image">
-                ${pet.photoUrl ? `<img src="${escapeAttr(pet.photoUrl)}" alt="${pet.name}">` : (pet.species === 'dog' ? '🐕' : '🐈')}
+                ${pet.photoUrl ? `<img src="${escapeAttr(pet.photoUrl)}" alt="${pet.name}">` : getSpeciesIcon(pet.species)}
             </div>
             <div class="pet-info">
                 <div class="pet-name">${escapeHTML(pet.name)}</div>
@@ -318,9 +369,18 @@ async function handlePetRegistration(event) {
     }
 }
 
-// ===================================================================
-// 6. CADASTRO DE PET (FORMULÁRIO)
-// ===================================================================
+async function deletePetFromForm() {
+    const petId = document.getElementById('petEditId').value;
+    if (!petId || !confirm("Excluir este pet permanentemente?")) return;
+
+    try {
+        await apiFetch(`/pets/${petId}`, { method: 'DELETE' });
+        showMessage('petRegisterMessage', 'Pet excluído.', 'success');
+        setTimeout(() => showPage('my-pets'), 1500);
+    } catch (error) {
+        showMessage('petRegisterMessage', error.message, 'error');
+    }
+}
 
 function showPetRegisterPage(petId = null) {
     const form = document.getElementById('petRegisterForm');
@@ -356,10 +416,24 @@ function showPetModal(petId) {
     const content = document.getElementById('petModalContent');
     content.innerHTML = `
         <div style="text-align:center">
+            <div style="font-size: 4rem; margin-bottom: 1rem;">
+                ${pet.photoUrl ? `<img src="${escapeAttr(pet.photoUrl)}" style="width:150px;height:150px;border-radius:50%;object-fit:cover">` : getSpeciesIcon(pet.species)}
+            </div>
             <h2>${escapeHTML(pet.name)}</h2>
-            <p>${escapeHTML(pet.description)}</p>
-            <p><strong>Contato do Dono:</strong> ${escapeHTML(pet.ownerName || 'N/A')}</p>
-            <button class="btn" onclick="closePetModal()">Fechar</button>
+            <p style="color:#666; margin-bottom: 1rem;">${escapeHTML(pet.description)}</p>
+            
+            <div style="background:#f8f9fa; padding:15px; border-radius:8px; text-align:left; margin-bottom:15px;">
+                <p><strong>Raça:</strong> ${escapeHTML(pet.breed)}</p>
+                <p><strong>Idade:</strong> ${pet.age}</p>
+                <p><strong>Porte:</strong> ${pet.size}</p>
+            </div>
+
+            ${AppState.currentUser ? 
+                `<button class="btn" onclick="alert('Contato: ${escapeAttr(pet.ownerName)} (${pet.ownerPhone})')">Entrar em Contato</button>` : 
+                `<p><small>Faça login para ver o contato.</small></p>`
+            }
+            <br><br>
+            <button class="btn btn-secondary" onclick="closePetModal()">Fechar</button>
         </div>
     `;
     document.getElementById('petModal').classList.add('active');
@@ -370,23 +444,84 @@ function closePetModal() {
 }
 
 // ===================================================================
-// 7. INICIALIZAÇÃO
+// 7. SERVIÇOS E BLOG (SIMPLIFICADO)
+// ===================================================================
+
+async function loadServices() {
+    const container = document.getElementById('servicesGrid');
+    container.innerHTML = '<div class="loading"><div class="spinner"></div></div>';
+    try {
+        const services = await apiFetch('/services');
+        AppState.serviceProviders = services;
+        
+        if (services.length === 0) {
+            container.innerHTML = '<div class="empty-state">Nenhum serviço encontrado.</div>';
+            return;
+        }
+
+        container.innerHTML = services.map(service => `
+            <div class="provider-card">
+                <h3>${escapeHTML(service.name)}</h3>
+                <p><strong>${escapeHTML(service.professional)}</strong> - ${escapeHTML(service.category)}</p>
+                <p>${escapeHTML(service.description)}</p>
+                <p><small>📍 ${escapeHTML(service.address)}</small></p>
+            </div>
+        `).join('');
+    } catch (error) {
+        container.innerHTML = '<div class="empty-state">Erro ao carregar serviços.</div>';
+    }
+}
+
+async function loadBlogPosts() {
+    const container = document.getElementById('blogFeed');
+    container.innerHTML = '<div class="loading"><div class="spinner"></div></div>';
+    try {
+        const posts = await apiFetch('/blog');
+        if (posts.length === 0) {
+            container.innerHTML = '<div class="empty-state">Nenhum post ainda.</div>';
+            return;
+        }
+        container.innerHTML = posts.map(post => `
+            <div class="post-card">
+                <div class="post-header">
+                    <strong>${escapeHTML(post.ownerName)}</strong> <span style="color:#999;font-size:0.8em">• ${formatDateTime(post.createdAt)}</span>
+                </div>
+                <div class="post-body">
+                    <p>${escapeHTML(post.content)}</p>
+                    ${post.photoUrl ? `<img src="${escapeAttr(post.photoUrl)}" class="post-image">` : ''}
+                </div>
+            </div>
+        `).join('');
+    } catch (error) {
+        container.innerHTML = '<div class="empty-state">Erro ao carregar blog.</div>';
+    }
+}
+
+// ===================================================================
+// 8. INICIALIZAÇÃO
 // ===================================================================
 
 document.addEventListener('DOMContentLoaded', () => {
-    // Listeners de Formulários
+    // Listeners
     document.getElementById('loginForm')?.addEventListener('submit', handleLogin);
     document.getElementById('registerForm')?.addEventListener('submit', handleRegister);
+    document.getElementById('profileForm')?.addEventListener('submit', handleProfileUpdate);
     document.getElementById('petRegisterForm')?.addEventListener('submit', handlePetRegistration);
 
-    // Monitoramento de Sessão do Supabase
+    // Filtros
+    const debouncedLoadPets = debounce(loadAdoptionPets, 500);
+    document.getElementById('searchFilter')?.addEventListener('input', debouncedLoadPets);
+    document.getElementById('speciesFilter')?.addEventListener('change', loadAdoptionPets);
+
+    // Monitor de Sessão
     supabaseClient.auth.onAuthStateChange(async (event, session) => {
         if (session) {
             try {
-                const userProfile = await apiFetch('/auth/me');
-                AppState.currentUser = userProfile;
-            } catch (e) {
-                console.error('Erro ao carregar perfil', e);
+                const profile = await apiFetch('/auth/me');
+                AppState.currentUser = profile;
+            } catch {
+                console.warn('Perfil não encontrado no backend.');
+                AppState.currentUser = null;
             }
         } else {
             AppState.currentUser = null;
@@ -394,9 +529,5 @@ document.addEventListener('DOMContentLoaded', () => {
         updateAuthButtons();
     });
 
-    // Carrega página inicial
     loadAdoptionPets();
 });
-
-// Outras funções de Services e Blog omitidas para brevidade, 
-// mas a lógica do 'supabaseClient' deve ser aplicada nelas também.
